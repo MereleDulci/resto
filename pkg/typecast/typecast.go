@@ -16,22 +16,6 @@ import (
 	"time"
 )
 
-type Resource interface {
-	GetID() string
-	InitID()
-}
-
-type ResourceFilter map[string]string
-
-type ResourceQuery struct {
-	Filter  ResourceFilter
-	Fields  []string
-	Include []string
-	Sort    []string
-	Limit   int64
-	Skip    int64
-}
-
 type FieldCastRule struct {
 	Key    string
 	Kind   reflect.Kind
@@ -45,11 +29,6 @@ type ResourceTypeCast struct {
 
 var filterModifierRegex = regexp.MustCompile("(.+)(\\[(\\$[[:alpha:]]+)])")
 var filterGroupRegex = regexp.MustCompile("(\\[(\\$[[:alpha:]]+)]\\[(\\d+)])(.+)")
-
-const PatchOpReplace = "replace"
-const PatchOpAdd = "add"
-const PatchOpRemove = "remove"
-const PatchOpInc = "inc"
 
 type PatchOperation struct {
 	Op    string      `json:"op"`
@@ -68,15 +47,6 @@ func (p *PatchOperation) UnmarshalJSON(data []byte) error {
 	p.Value = v["value"]
 
 	return nil
-}
-
-func MakeResourceQuery() *ResourceQuery {
-	return &ResourceQuery{
-		Filter:  ResourceFilter{},
-		Fields:  []string{},
-		Include: []string{},
-		Sort:    []string{},
-	}
 }
 
 func MakeTypeCastFromResource(t reflect.Type) ResourceTypeCast {
@@ -557,22 +527,22 @@ func (caster ResourceTypeCast) PatchToDBOps(patchOps []PatchOperation) (bson.D, 
 		}
 
 		switch op.Op {
-		case PatchOpReplace:
+		case constants.PatchOpReplace:
 			set = append(set, bson.E{
 				Key:   documentPath,
 				Value: typeCastedValue,
 			})
-		case PatchOpAdd:
+		case constants.PatchOpAdd:
 			push = append(push, bson.E{
 				Key:   documentPath,
 				Value: typeCastedValue,
 			})
-		case PatchOpRemove:
+		case constants.PatchOpRemove:
 			pull = append(pull, bson.E{
 				Key:   documentPath,
 				Value: typeCastedValue,
 			})
-		case PatchOpInc:
+		case constants.PatchOpInc:
 			inc = append(inc, bson.E{
 				Key:   documentPath,
 				Value: typeCastedValue,
@@ -612,7 +582,7 @@ func (caster ResourceTypeCast) PatchToDBOps(patchOps []PatchOperation) (bson.D, 
 func (caster ResourceTypeCast) PatchTestToQuery(patchOps []PatchOperation) (bson.D, error) {
 	query := bson.D{}
 	for _, op := range patchOps {
-		if op.Op == "test" {
+		if op.Op == constants.PatchOpTest {
 			documentPath := transformPath(op.Path)
 			typeCastedValue, err := caster.transformPathValue(documentPath, op.Value)
 			if err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/MereleDulci/resto/pkg/hook"
 	"github.com/MereleDulci/resto/pkg/relationships"
 	"github.com/MereleDulci/resto/pkg/req"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -48,10 +49,10 @@ type ResourceEncoder interface {
 	WritableMappingPatch() map[access.PolicyName][]string
 	WritableMappingPost() map[access.PolicyName][]string
 	// CursorEncoder Encodes the provided resource to DB representation of self
-	CursorEncoder(resource typecast.Resource) (interface{}, error)
+	CursorEncoder(resource resource.Resourcer) (interface{}, error)
 	WithCursorEncoder(newEncoder CursorEncoder) *Encoder
 	// CursorDecoder Decodes the provided DB cursor to the public representation of self
-	CursorDecoder(decoder Decoder) (typecast.Resource, error)
+	CursorDecoder(decoder Decoder) (resource.Resourcer, error)
 	WithCursorDecoder(newDecoder CursorDecoder) *Encoder
 	References() []relationships.IncludePath
 }
@@ -59,12 +60,12 @@ type ResourceEncoder interface {
 type ResourceHandler interface {
 	GetResourceName() string
 	GetResourceReflectType() reflect.Type
-	GetHooks() *hook.ResourceHookRegistry
-	Find(*req.Ctx, *typecast.ResourceQuery) ([]typecast.Resource, error)
-	Create(*req.Ctx, []typecast.Resource) ([]typecast.Resource, error)
-	Update(*req.Ctx, string, []typecast.PatchOperation, *typecast.ResourceQuery) (typecast.Resource, error)
+	GetHooks() *hook.Registry
+	Find(*req.Ctx, *resource.Query) ([]resource.Resourcer, error)
+	Create(*req.Ctx, []resource.Resourcer) ([]resource.Resourcer, error)
+	Update(*req.Ctx, string, []typecast.PatchOperation, *resource.Query) (resource.Resourcer, error)
 	Delete(*req.Ctx, string) error
-	Include(*req.Ctx, []typecast.Resource, *typecast.ResourceQuery) ([]typecast.Resource, error)
+	Include(*req.Ctx, []resource.Resourcer, *resource.Query) ([]resource.Resourcer, error)
 }
 
 type Encoder struct {
@@ -80,33 +81,33 @@ type Encoder struct {
 
 type ResourceHandle struct {
 	ResourceType     reflect.Type
-	Hooks            hook.ResourceHookRegistry
+	Hooks            hook.Registry
 	resourceTypeCast typecast.ResourceTypeCast
 	encoder          ResourceEncoder
 	collection       *mongo.Collection
-	systemClient     RequestProducer
+	systemClient     Accessor
 	timeouts         ResourceTimeoutSettings
 	log              zerolog.Logger
 }
 
 type SingleHookResult struct {
-	resource   typecast.Resource
+	resource   resource.Resourcer
 	err        error
 	orderIndex int
 }
 
 type ReadResult struct {
-	result []typecast.Resource
+	result []resource.Resourcer
 	err    error
 }
 
 type CreateResult struct {
-	result []typecast.Resource
+	result []resource.Resourcer
 	err    error
 }
 
 type UpdateResult struct {
-	result typecast.Resource
+	result resource.Resourcer
 	err    error
 }
 
@@ -114,8 +115,8 @@ type DeleteResult struct {
 	err error
 }
 
-type CursorEncoder func(resource typecast.Resource) (interface{}, error)
-type CursorDecoder func(decoder Decoder) (typecast.Resource, error)
+type CursorEncoder func(resource resource.Resourcer) (interface{}, error)
+type CursorDecoder func(decoder Decoder) (resource.Resourcer, error)
 
 func makeResourceEncoder(resourceType reflect.Type, accessPolicies []access.AccessPolicy) ResourceEncoder {
 	return &Encoder{
@@ -125,25 +126,25 @@ func makeResourceEncoder(resourceType reflect.Type, accessPolicies []access.Acce
 		readableMapping:      access.GetReadableMapping(resourceType, accessPolicies),
 		writableMappingPatch: access.GetWritableMappingPatch(resourceType, accessPolicies),
 		writableMappingPost:  access.GetWritableMappingPost(resourceType, accessPolicies),
-		cursorEncoder: func(resource typecast.Resource) (interface{}, error) {
+		cursorEncoder: func(resource resource.Resourcer) (interface{}, error) {
 			return resource, nil
 		},
-		cursorDecoder: func(decoder Decoder) (typecast.Resource, error) {
+		cursorDecoder: func(decoder Decoder) (resource.Resourcer, error) {
 			instance := reflect.New(resourceType)
 			iface := instance.Interface()
 			err := decoder.Decode(iface)
-			return iface.(typecast.Resource), err
+			return iface.(resource.Resourcer), err
 		},
 	}
 }
 
-func MakeResourceHandler(t reflect.Type, collection *mongo.Collection, accessPolicies []access.AccessPolicy, systemClient RequestProducer) *ResourceHandle {
+func MakeResourceHandler(t reflect.Type, collection *mongo.Collection, accessPolicies []access.AccessPolicy, systemClient Accessor) *ResourceHandle {
 
 	encoder := makeResourceEncoder(t.Elem(), accessPolicies)
 
 	h := &ResourceHandle{
 		ResourceType:     t,
-		Hooks:            hook.MakeResourceHookRegistry(),
+		Hooks:            hook.NewRegistry(),
 		resourceTypeCast: typecast.MakeTypeCastFromResource(t.Elem()),
 		encoder:          encoder,
 		collection:       collection,
@@ -177,14 +178,14 @@ func (enc *Encoder) WithCursorEncoder(newEncoder CursorEncoder) *Encoder {
 	enc.cursorEncoder = newEncoder
 	return enc
 }
-func (enc *Encoder) CursorEncoder(resource typecast.Resource) (interface{}, error) {
+func (enc *Encoder) CursorEncoder(resource resource.Resourcer) (interface{}, error) {
 	return enc.cursorEncoder(resource)
 }
 func (enc *Encoder) WithCursorDecoder(newDecoder CursorDecoder) *Encoder {
 	enc.cursorDecoder = newDecoder
 	return enc
 }
-func (enc *Encoder) CursorDecoder(decoder Decoder) (typecast.Resource, error) {
+func (enc *Encoder) CursorDecoder(decoder Decoder) (resource.Resourcer, error) {
 	return enc.cursorDecoder(decoder)
 }
 func (enc *Encoder) References() []relationships.IncludePath {
@@ -200,7 +201,7 @@ func (rh *ResourceHandle) GetResourceName() string {
 	return rh.ResourceType.String()
 }
 
-func (rh *ResourceHandle) GetHooks() *hook.ResourceHookRegistry {
+func (rh *ResourceHandle) GetHooks() *hook.Registry {
 	return &rh.Hooks
 }
 
@@ -208,7 +209,7 @@ func (rh *ResourceHandle) GetResourceReflectType() reflect.Type {
 	return rh.ResourceType
 }
 
-func (rh *ResourceHandle) Find(resourceCtx *req.Ctx, query *typecast.ResourceQuery) ([]typecast.Resource, error) {
+func (rh *ResourceHandle) Find(resourceCtx *req.Ctx, query *resource.Query) ([]resource.Resourcer, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			rh.log.Error().Interface("panic", r).Msg("panic in resource handler")
@@ -365,7 +366,7 @@ func (rh *ResourceHandle) Find(resourceCtx *req.Ctx, query *typecast.ResourceQue
 			return
 		}
 
-		results := make([]typecast.Resource, orderIndex)
+		results := make([]resource.Resourcer, orderIndex)
 		for afterResult := range afterTransformChan {
 			if afterResult.err != nil {
 				rh.log.Error().Stack().Err(afterResult.err).
@@ -406,7 +407,7 @@ func (rh *ResourceHandle) Find(resourceCtx *req.Ctx, query *typecast.ResourceQue
 	}
 }
 
-func (rh *ResourceHandle) Create(resourceCtx *req.Ctx, resources []typecast.Resource) ([]typecast.Resource, error) {
+func (rh *ResourceHandle) Create(resourceCtx *req.Ctx, resources []resource.Resourcer) ([]resource.Resourcer, error) {
 
 	ctx, cancel := context.WithTimeout(resourceCtx.UserContext(), rh.timeouts.WritesTimeout)
 	defer cancel()
@@ -460,12 +461,12 @@ func (rh *ResourceHandle) Create(resourceCtx *req.Ctx, resources []typecast.Reso
 		beforeTransformed := make([]interface{}, 0)
 		for res := range beforeTransformChan {
 			if res.err != nil {
-				reschan <- CreateResult{[]typecast.Resource{}, res.err}
+				reschan <- CreateResult{[]resource.Resourcer{}, res.err}
 				return
 			} else {
 				dbView, err := rh.encoder.CursorEncoder(res.resource)
 				if err != nil {
-					reschan <- CreateResult{[]typecast.Resource{}, err}
+					reschan <- CreateResult{[]resource.Resourcer{}, err}
 					return
 				}
 				beforeTransformed = append(beforeTransformed, dbView)
@@ -474,7 +475,7 @@ func (rh *ResourceHandle) Create(resourceCtx *req.Ctx, resources []typecast.Reso
 
 		resourceCtx.SetPayload(beforeTransformed)
 		if _, err := rh.collection.InsertMany(ctx, beforeTransformed); err != nil {
-			reschan <- CreateResult{[]typecast.Resource{}, err}
+			reschan <- CreateResult{[]resource.Resourcer{}, err}
 			return
 		}
 
@@ -498,10 +499,10 @@ func (rh *ResourceHandle) Create(resourceCtx *req.Ctx, resources []typecast.Reso
 			afterWg.Wait()
 			close(afterTransformChan)
 		}()
-		afterTransformed := make([]typecast.Resource, 0)
+		afterTransformed := make([]resource.Resourcer, 0)
 		for res := range afterTransformChan {
 			if res.err != nil {
-				reschan <- CreateResult{[]typecast.Resource{}, res.err}
+				reschan <- CreateResult{[]resource.Resourcer{}, res.err}
 				return
 			} else {
 				afterTransformed = append(afterTransformed, res.resource)
@@ -524,7 +525,7 @@ func (rh *ResourceHandle) Create(resourceCtx *req.Ctx, resources []typecast.Reso
 	}
 }
 
-func (rh *ResourceHandle) Update(resourceCtx *req.Ctx, id string, operations []typecast.PatchOperation, query *typecast.ResourceQuery) (typecast.Resource, error) {
+func (rh *ResourceHandle) Update(resourceCtx *req.Ctx, id string, operations []typecast.PatchOperation, query *resource.Query) (resource.Resourcer, error) {
 	ctx, cancel := context.WithTimeout(resourceCtx.UserContext(), rh.timeouts.WritesTimeout)
 	defer cancel()
 
@@ -750,7 +751,7 @@ func (rh *ResourceHandle) Delete(resourceCtx *req.Ctx, id string) error {
 
 		//Access is validated - resolve full document to apply before transform hooks
 		//TODO: It might potentially have a mismatch on the restriction queries if the policy granting delete access does not provide read access
-		resources, err := rh.Find(resourceCtx.Derive(), &typecast.ResourceQuery{Filter: map[string]string{"id": id}})
+		resources, err := rh.Find(resourceCtx.Derive(), &resource.Query{Filter: map[string]string{"id": id}})
 		if err != nil {
 			reschan <- DeleteResult{err: err}
 			return
@@ -820,7 +821,7 @@ In order to preserve all functionality related to the access rules "fetch" stage
 through the rigth .Find handler of the target resource.
 There's no direct access to the other resource handles at the moment. However scoped client can be used to access it
 */
-func (rh *ResourceHandle) Include(resourceCtx *req.Ctx, primary []typecast.Resource, masterQuery *typecast.ResourceQuery) ([]typecast.Resource, error) {
+func (rh *ResourceHandle) Include(resourceCtx *req.Ctx, primary []resource.Resourcer, masterQuery *resource.Query) ([]resource.Resourcer, error) {
 
 	//ctx, cancel := context.WithTimeout(resourceCtx.UserContext(), rh.timeouts.ReadsTimeout)
 	//defer cancel()
@@ -833,7 +834,7 @@ func (rh *ResourceHandle) Include(resourceCtx *req.Ctx, primary []typecast.Resou
 
 	refPaths := rh.encoder.References()
 	//Build sub-context for additional finds
-	scopedClient := rh.systemClient.ScopeToToken(resourceCtx.Authentication().(*access.AuthenticationToken))
+	scopedClient := rh.systemClient.ScopeToToken(resourceCtx.Authentication().(*access.Token))
 
 	//Confirm the request is legit and can be processed
 	for _, requestedInclude := range relationships.GetTopLevelIncludeKeys(masterQuery.Include) {
@@ -849,7 +850,7 @@ func (rh *ResourceHandle) Include(resourceCtx *req.Ctx, primary []typecast.Resou
 			continue
 		}
 
-		secondary, err := scopedClient.Resource(referenceConfig.Resource).Read(&typecast.ResourceQuery{
+		secondary, err := scopedClient.Resource(referenceConfig.Resource).Read(&resource.Query{
 			Filter: map[string]string{
 				fmt.Sprintf("%s[$in]", referenceConfig.RemoteField): strings.Join(referencedIds, ","),
 			},

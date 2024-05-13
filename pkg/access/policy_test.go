@@ -423,7 +423,7 @@ func TestAccessByExactContextValueMatch(t *testing.T) {
 
 	t.Run("it should return a query exactly matching the field provided to context value provided", func(t *testing.T) {
 		matcher := AccessByExactContextValueMatch("chatThread", "ownThreads")
-		ctx := req.MakeNewCtx()
+		ctx := req.NewCtx()
 		ctx.Locals("ownThreads", "123")
 		query, err := matcher(AccessPolicy{}, ctx)
 		assert.Nil(t, err)
@@ -433,7 +433,7 @@ func TestAccessByExactContextValueMatch(t *testing.T) {
 	t.Run("It should fail if required context value is not found", func(t *testing.T) {
 
 		matcher := AccessByExactContextValueMatch("chatThread", "ownThreads")
-		ctx := req.MakeNewCtx()
+		ctx := req.NewCtx()
 		query, err := matcher(AccessPolicy{}, ctx)
 		assert.Nil(t, query)
 		assert.Error(t, err, "context value ownThreads not found")
@@ -444,7 +444,7 @@ func TestAccessByInclusiveContextSliceMatch(t *testing.T) {
 
 	t.Run("it should return a query matching context slice to resource field using $in operator", func(t *testing.T) {
 		matcher := AccessByInclusiveContextSliceMatch("chatThread", "knownThreads")
-		ctx := req.MakeNewCtx()
+		ctx := req.NewCtx()
 		ctx.Locals("knownThreads", []string{"123", "456"})
 		query, err := matcher(AccessPolicy{}, ctx)
 		assert.Nil(t, err)
@@ -453,7 +453,7 @@ func TestAccessByInclusiveContextSliceMatch(t *testing.T) {
 
 	t.Run("it should fail if required context value is not found", func(t *testing.T) {
 		matcher := AccessByInclusiveContextSliceMatch("chatThread", "knownThreads")
-		ctx := req.MakeNewCtx()
+		ctx := req.NewCtx()
 		query, err := matcher(AccessPolicy{}, ctx)
 		assert.Nil(t, query)
 		assert.Error(t, err, "context value knownThreads not found")

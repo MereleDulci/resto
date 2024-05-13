@@ -8,6 +8,7 @@ import (
 	"github.com/MereleDulci/resto"
 	"github.com/MereleDulci/resto/pkg/access"
 	"github.com/MereleDulci/resto/pkg/req"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"io"
 	"net/http"
@@ -16,21 +17,21 @@ import (
 	"strings"
 )
 
-func MakeHttpHandler(handlers map[string]*resto.ResourceHandle, authenticator func(*http.Request) *access.AuthenticationToken, errchan chan error) HttpHandler {
-	return HttpHandler{
+func NewHandler(handlers map[string]*resto.ResourceHandle, authenticator func(*http.Request) *access.Token, errchan chan error) Handler {
+	return Handler{
 		handlers,
 		authenticator,
 		errchan,
 	}
 }
 
-type HttpHandler struct {
+type Handler struct {
 	handlers      map[string]*resto.ResourceHandle
-	authenticator func(*http.Request) *access.AuthenticationToken
+	authenticator func(*http.Request) *access.Token
 	errchan       chan error
 }
 
-func (h HttpHandler) AttachMux(ns string, mux *http.ServeMux) HttpHandler {
+func (h Handler) AttachMux(ns string, mux *http.ServeMux) Handler {
 	if h.authenticator == nil {
 		panic(errors.New("request authenticator is not configured"))
 	}
@@ -44,21 +45,21 @@ func (h HttpHandler) AttachMux(ns string, mux *http.ServeMux) HttpHandler {
 			baseUrl = fmt.Sprintf("/%s/%s", strings.Trim(ns, "/"), strings.Trim(baseUrl, "/"))
 		}
 
-		mux.HandleFunc("GET " + baseUrl, h.makeFindManyHandler(rh))
-		mux.HandleFunc("GET " + baseUrl + "/{id}", h.makeFindOneHandler(rh))
-		mux.HandleFunc("POST " + baseUrl, h.makeCreateHandler(rh))
-		mux.HandleFunc("PATCH " + baseUrl + "/{id}", h.makeUpdateHandler(rh))
-		mux.HandleFunc("DELETE " + baseUrl + "/{id}", h.makeDeleteHandler(rh))
+		mux.HandleFunc("GET "+baseUrl, h.makeFindManyHandler(rh))
+		mux.HandleFunc("GET "+baseUrl+"/{id}", h.makeFindOneHandler(rh))
+		mux.HandleFunc("POST "+baseUrl, h.makeCreateHandler(rh))
+		mux.HandleFunc("PATCH "+baseUrl+"/{id}", h.makeUpdateHandler(rh))
+		mux.HandleFunc("DELETE "+baseUrl+"/{id}", h.makeDeleteHandler(rh))
 	}
 	return h
 }
 
-func (h HttpHandler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerFunc {
+func (h Handler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		r.Context()
 
-		internalContext := req.MakeNewCtx()
+		internalContext := req.NewCtx()
 
 		internalContext.SetAuthentication(h.authenticator(r))
 
@@ -98,9 +99,9 @@ func (h HttpHandler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerF
 	}
 }
 
-func (h HttpHandler) makeFindOneHandler(rh *resto.ResourceHandle) http.HandlerFunc {
+func (h Handler) makeFindOneHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		internalContext := req.MakeNewCtx()
+		internalContext := req.NewCtx()
 
 		internalContext.SetAuthentication(h.authenticator(r))
 
@@ -148,9 +149,9 @@ func (h HttpHandler) makeFindOneHandler(rh *resto.ResourceHandle) http.HandlerFu
 	}
 }
 
-func (h HttpHandler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
+func (h Handler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		internalContext := req.MakeNewCtx()
+		internalContext := req.NewCtx()
 		internalContext.SetAuthentication(h.authenticator(r))
 
 		query := internalContext.Query()
@@ -180,9 +181,9 @@ func (h HttpHandler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFun
 			return
 		}
 
-		resourcesToCreate := make([]typecast.Resource, len(payload))
+		resourcesToCreate := make([]resource.Resourcer, len(payload))
 		for i, p := range payload {
-			resourcesToCreate[i] = p.(typecast.Resource)
+			resourcesToCreate[i] = p.(resource.Resourcer)
 		}
 
 		result, err := rh.Create(internalContext, resourcesToCreate)
@@ -214,9 +215,9 @@ func (h HttpHandler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFun
 	}
 }
 
-func (h HttpHandler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
+func (h Handler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		internalContext := req.MakeNewCtx()
+		internalContext := req.NewCtx()
 		internalContext.SetAuthentication(h.authenticator(r))
 
 		query := internalContext.Query()
@@ -277,9 +278,9 @@ func (h HttpHandler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFun
 	}
 }
 
-func (h HttpHandler) makeDeleteHandler(rh *resto.ResourceHandle) http.HandlerFunc {
+func (h Handler) makeDeleteHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		internalContext := req.MakeNewCtx()
+		internalContext := req.NewCtx()
 
 		internalContext.SetAuthentication(h.authenticator(r))
 		internalContext.SetId(r.PathValue("id"))

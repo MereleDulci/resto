@@ -9,7 +9,7 @@ type TestAuth struct {
 	ID string
 }
 
-func (ta *TestAuth) Clone() Clonable {
+func (ta *TestAuth) Clone() Cloner {
 	return &TestAuth{}
 }
 
@@ -20,7 +20,7 @@ func TestCtx_Clone(t *testing.T) {
 		auth := &TestAuth{
 			ID: "foo",
 		}
-		source := MakeNewCtx()
+		source := NewCtx()
 		source.SetAuthentication(auth)
 
 		derivative := source.Derive()

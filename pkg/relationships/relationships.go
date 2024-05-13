@@ -1,7 +1,7 @@
 package relationships
 
 import (
-	"github.com/MereleDulci/resto/pkg/typecast"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/samber/lo"
 	"reflect"
 	"slices"
@@ -120,7 +120,7 @@ func getPrimaryField(t reflect.Type) reflect.StructField {
 	return reflect.StructField{}
 }
 
-func GetReferencedIdsFromPrimary(primary []typecast.Resource, includeConfig IncludePath) []string {
+func GetReferencedIdsFromPrimary(primary []resource.Resourcer, includeConfig IncludePath) []string {
 	ids := make([]string, 0)
 	for _, p := range primary {
 		refField := reflect.ValueOf(p).Elem().FieldByName(includeConfig.LocalField)
@@ -157,7 +157,7 @@ func GetReferencedIdsFromPrimary(primary []typecast.Resource, includeConfig Incl
 	return ids
 }
 
-func MergeWithIncluded(primary []typecast.Resource, secondary []typecast.Resource, includeConfig IncludePath) error {
+func MergeWithIncluded(primary []resource.Resourcer, secondary []resource.Resourcer, includeConfig IncludePath) error {
 
 	for _, p := range primary {
 		localField := reflect.ValueOf(p).Elem().FieldByName(includeConfig.LocalField)
@@ -169,7 +169,7 @@ func MergeWithIncluded(primary []typecast.Resource, secondary []typecast.Resourc
 
 			strVal := localField.Elem().FieldByName(includeConfig.RemoteField).String()
 
-			replaceWith, ok := lo.Find(secondary, func(s typecast.Resource) bool {
+			replaceWith, ok := lo.Find(secondary, func(s resource.Resourcer) bool {
 				return s.GetID() == strVal
 			})
 
@@ -187,7 +187,7 @@ func MergeWithIncluded(primary []typecast.Resource, secondary []typecast.Resourc
 
 				strId := elt.FieldByName(includeConfig.RemoteField).String()
 
-				replaceWith, ok := lo.Find(secondary, func(s typecast.Resource) bool {
+				replaceWith, ok := lo.Find(secondary, func(s resource.Resourcer) bool {
 					return s.GetID() == strId
 				})
 

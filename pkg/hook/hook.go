@@ -2,70 +2,71 @@ package hook
 
 import (
 	"github.com/MereleDulci/resto/pkg/req"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 )
 
-type BeforeReadHook func(*req.Ctx, *typecast.ResourceQuery) (*typecast.ResourceQuery, error)
-type BeforeCreateHook func(*req.Ctx, typecast.Resource) (typecast.Resource, error)
-type BeforeUpdateHook func(*req.Ctx, []typecast.PatchOperation) ([]typecast.PatchOperation, error)
-type BeforeDeleteHook func(*req.Ctx, typecast.Resource) error
+type BeforeRead func(*req.Ctx, *resource.Query) (*resource.Query, error)
+type BeforeCreate func(*req.Ctx, resource.Resourcer) (resource.Resourcer, error)
+type BeforeUpdate func(*req.Ctx, []typecast.PatchOperation) ([]typecast.PatchOperation, error)
+type BeforeDelete func(*req.Ctx, resource.Resourcer) error
 
-type AfterHook func(*req.Ctx, typecast.Resource) (typecast.Resource, error)
-type AfterDeleteHook func(*req.Ctx, typecast.Resource) error
-type AfterAllHook func(*req.Ctx, []typecast.Resource) ([]typecast.Resource, error)
+type After func(*req.Ctx, resource.Resourcer) (resource.Resourcer, error)
+type AfterDelete func(*req.Ctx, resource.Resourcer) error
+type AfterAll func(*req.Ctx, []resource.Resourcer) ([]resource.Resourcer, error)
 
-func MakeResourceHookRegistry() ResourceHookRegistry {
-	return ResourceHookRegistry{}
+func NewRegistry() Registry {
+	return Registry{}
 }
 
-type ResourceHookRegistry struct {
-	beforeReads   []BeforeReadHook
-	beforeDeletes []BeforeDeleteHook
+type Registry struct {
+	beforeReads   []BeforeRead
+	beforeDeletes []BeforeDelete
 
-	beforeCreates []BeforeCreateHook
+	beforeCreates []BeforeCreate
 
-	beforeUpdates []BeforeUpdateHook
+	beforeUpdates []BeforeUpdate
 
-	afterReads    []AfterHook
-	afterReadAlls []AfterAllHook
-	afterCreates  []AfterHook
-	afterUpdates  []AfterHook
-	afterDeletes  []AfterDeleteHook
+	afterReads    []After
+	afterReadAlls []AfterAll
+	afterCreates  []After
+	afterUpdates  []After
+	afterDeletes  []AfterDelete
 }
 
-func (hr *ResourceHookRegistry) RegisterBeforeCreate(hook BeforeCreateHook) {
+func (hr *Registry) RegisterBeforeCreate(hook BeforeCreate) {
 	hr.beforeCreates = append(hr.beforeCreates, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterBeforeRead(hook BeforeReadHook) {
+func (hr *Registry) RegisterBeforeRead(hook BeforeRead) {
 	hr.beforeReads = append(hr.beforeReads, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterBeforeUpdate(hook BeforeUpdateHook) {
+func (hr *Registry) RegisterBeforeUpdate(hook BeforeUpdate) {
 	hr.beforeUpdates = append(hr.beforeUpdates, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterAfterCreate(hook AfterHook) {
+func (hr *Registry) RegisterAfterCreate(hook After) {
 	hr.afterCreates = append(hr.afterCreates, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterAfterRead(hook AfterHook) {
+func (hr *Registry) RegisterAfterRead(hook After) {
 	hr.afterReads = append(hr.afterReads, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterAfterReadAll(hook AfterAllHook) {
+func (hr *Registry) RegisterAfterReadAll(hook AfterAll) {
 	hr.afterReadAlls = append(hr.afterReadAlls, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterAfterUpdate(hook AfterHook) {
+func (hr *Registry) RegisterAfterUpdate(hook After) {
 	hr.afterUpdates = append(hr.afterUpdates, hook)
 }
 
-func (hr *ResourceHookRegistry) RegisterBeforeDelete(hook BeforeDeleteHook) {
+func (hr *Registry) RegisterBeforeDelete(hook BeforeDelete) {
 	hr.beforeDeletes = append(hr.beforeDeletes, hook)
 }
 
-func (hr *ResourceHookRegistry) RunBeforeCreates(c *req.Ctx, r typecast.Resource) (typecast.Resource, error) {
+func (hr *Registry) RunBeforeCreates(c *req.Ctx, r resource.Resourcer) (resource.Resourcer, error) {
 	nextResource := r
 	var err error
 	for _, hook := range hr.beforeCreates {
@@ -77,7 +78,7 @@ func (hr *ResourceHookRegistry) RunBeforeCreates(c *req.Ctx, r typecast.Resource
 	return r, nil
 }
 
-func (hr *ResourceHookRegistry) RunAfterCreates(c *req.Ctx, r typecast.Resource) (typecast.Resource, error) {
+func (hr *Registry) RunAfterCreates(c *req.Ctx, r resource.Resourcer) (resource.Resourcer, error) {
 	nextResource := r
 	var err error
 	for _, hook := range hr.afterCreates {
@@ -89,7 +90,7 @@ func (hr *ResourceHookRegistry) RunAfterCreates(c *req.Ctx, r typecast.Resource)
 	return r, nil
 }
 
-func (hr *ResourceHookRegistry) RunBeforeReads(c *req.Ctx, query *typecast.ResourceQuery) (*typecast.ResourceQuery, error) {
+func (hr *Registry) RunBeforeReads(c *req.Ctx, query *resource.Query) (*resource.Query, error) {
 	var err error
 	nextQuery := query
 	for _, hook := range hr.beforeReads {
@@ -101,7 +102,7 @@ func (hr *ResourceHookRegistry) RunBeforeReads(c *req.Ctx, query *typecast.Resou
 	return nextQuery, nil
 }
 
-func (hr *ResourceHookRegistry) RunAfterReads(c *req.Ctx, r typecast.Resource) (typecast.Resource, error) {
+func (hr *Registry) RunAfterReads(c *req.Ctx, r resource.Resourcer) (resource.Resourcer, error) {
 	nextResource := r
 	var err error
 	for _, hook := range hr.afterReads {
@@ -113,7 +114,7 @@ func (hr *ResourceHookRegistry) RunAfterReads(c *req.Ctx, r typecast.Resource) (
 	return r, nil
 }
 
-func (hr *ResourceHookRegistry) RunAfterReadAll(c *req.Ctx, rs []typecast.Resource) ([]typecast.Resource, error) {
+func (hr *Registry) RunAfterReadAll(c *req.Ctx, rs []resource.Resourcer) ([]resource.Resourcer, error) {
 	nextResources := rs
 	var err error
 	for _, hook := range hr.afterReadAlls {
@@ -125,7 +126,7 @@ func (hr *ResourceHookRegistry) RunAfterReadAll(c *req.Ctx, rs []typecast.Resour
 	return rs, nil
 }
 
-func (hr *ResourceHookRegistry) RunBeforeUpdates(c *req.Ctx, ops []typecast.PatchOperation) ([]typecast.PatchOperation, error) {
+func (hr *Registry) RunBeforeUpdates(c *req.Ctx, ops []typecast.PatchOperation) ([]typecast.PatchOperation, error) {
 	var err error
 	nextOps := ops
 	for _, hook := range hr.beforeUpdates {
@@ -137,7 +138,7 @@ func (hr *ResourceHookRegistry) RunBeforeUpdates(c *req.Ctx, ops []typecast.Patc
 	return nextOps, nil
 }
 
-func (hr *ResourceHookRegistry) RunAfterUpdates(c *req.Ctx, r typecast.Resource) (typecast.Resource, error) {
+func (hr *Registry) RunAfterUpdates(c *req.Ctx, r resource.Resourcer) (resource.Resourcer, error) {
 	nextResource := r
 	var err error
 	for _, hook := range hr.afterUpdates {
@@ -149,7 +150,7 @@ func (hr *ResourceHookRegistry) RunAfterUpdates(c *req.Ctx, r typecast.Resource)
 	return r, nil
 }
 
-func (hr *ResourceHookRegistry) RunBeforeDeletes(c *req.Ctx, r typecast.Resource) error {
+func (hr *Registry) RunBeforeDeletes(c *req.Ctx, r resource.Resourcer) error {
 	var err error
 	for _, hook := range hr.beforeDeletes {
 		err = hook(c, r)
@@ -160,7 +161,7 @@ func (hr *ResourceHookRegistry) RunBeforeDeletes(c *req.Ctx, r typecast.Resource
 	return nil
 }
 
-func (hr *ResourceHookRegistry) RunAfterDeletes(c *req.Ctx, r typecast.Resource) error {
+func (hr *Registry) RunAfterDeletes(c *req.Ctx, r resource.Resourcer) error {
 	var err error
 	for _, hook := range hr.afterDeletes {
 		err = hook(c, r)

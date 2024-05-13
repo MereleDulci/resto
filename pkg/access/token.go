@@ -7,35 +7,35 @@ import (
 )
 
 type TokenExtension struct {
-	Key string
+	Key   string
 	Value interface{}
 }
 
-type AuthenticationToken struct {
-	ID        string    `jsonapi:"primary,authentication-tokens"`
-	Token     string    `jsonapi:"attr,token"`
-	CreatedAt time.Time `jsonapi:"attr,createdAt,iso8601"`
-	ExpiresAt time.Time `jsonapi:"attr,expiresAt,iso8601"`
+type Token struct {
+	ID         string           `jsonapi:"primary,authentication-tokens"`
+	Token      string           `jsonapi:"attr,token"`
+	CreatedAt  time.Time        `jsonapi:"attr,createdAt,iso8601"`
+	ExpiresAt  time.Time        `jsonapi:"attr,expiresAt,iso8601"`
 	extensions []TokenExtension `jsonapi:"attr,extensions"`
 }
 
-func (at *AuthenticationToken) GetID() string {
+func (at *Token) GetID() string {
 	if at == nil {
 		return ""
 	}
 	return at.ID
 }
 
-func (at *AuthenticationToken) InitID() {
+func (at *Token) InitID() {
 	at.ID = primitive.NewObjectID().Hex()
 }
 
-func (at *AuthenticationToken) Clone() req.Clonable {
+func (at *Token) Clone() req.Cloner {
 	next := *at
 	return &next
 }
 
-func (at *AuthenticationToken) GetAttr(key string) TokenExtension {
+func (at *Token) GetAttr(key string) TokenExtension {
 	for _, ext := range at.extensions {
 		if ext.Key == key {
 			return ext
@@ -45,7 +45,7 @@ func (at *AuthenticationToken) GetAttr(key string) TokenExtension {
 	return TokenExtension{}
 }
 
-func (at *AuthenticationToken) SetAttr(key string, val interface{}) {
+func (at *Token) SetAttr(key string, val interface{}) {
 	for i, ext := range at.extensions {
 		if ext.Key == key {
 			at.extensions[i].Value = val

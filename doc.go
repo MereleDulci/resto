@@ -6,7 +6,7 @@ It focuses on providing quick setup with minimal overhead and easy maintenance t
 The main building blocks are:
 	* ResourceHandle - a struct providing CRUD operations for a resource
 	* ResourceEncoder - an interface you're required to implement to turn your struct into a compatible resource
-	* RequestProducer - an intra-process interface to intract with resources bypassing HTTP
+	* Accessor - an intra-process interface to intract with resources bypassing HTTP
 	* HTTP compatibility layer and JSON:API serialisation
 
 This package uses zerolog for tracing. See zerolog documentation for more configuration options. By default the

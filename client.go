@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"github.com/MereleDulci/resto/pkg/access"
 	"github.com/MereleDulci/resto/pkg/req"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/rs/zerolog/log"
 	"time"
 )
 
-func MakeSystemClient() RequestProducer {
-	ctx := req.MakeNewCtx()
-	ctx.SetAuthentication(&access.AuthenticationToken{
+func MakeSystemClient() Accessor {
+	ctx := req.NewCtx()
+	ctx.SetAuthentication(&access.Token{
 		ID:        "system",
 		CreatedAt: time.Date(1970, time.Month(1), 1, 0, 0, 0, 0, time.UTC),
 		ExpiresAt: time.Unix(1<<63-62135596801, 999999999),
@@ -20,10 +21,10 @@ func MakeSystemClient() RequestProducer {
 	return &ResourceClient{referenceContext: ctx, handlers: map[string]*ResourceHandle{}}
 }
 
-type RequestProducer interface {
-	Resource(resourceName string) Requestor
+type Accessor interface {
+	Resource(resourceName string) Requester
 	RegisterHandlers(handlers map[string]*ResourceHandle)
-	ScopeToToken(authentication *access.AuthenticationToken) RequestProducer
+	ScopeToToken(authentication *access.Token) Accessor
 }
 
 type ResourceClient struct {
@@ -32,7 +33,7 @@ type ResourceClient struct {
 }
 
 // ScopeToToken returns a new ResourceClient that is scoped to the provided authentication token.
-func (client *ResourceClient) ScopeToToken(authentication *access.AuthenticationToken) RequestProducer {
+func (client *ResourceClient) ScopeToToken(authentication *access.Token) Accessor {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().Msgf("panic: %v", r)
@@ -54,23 +55,23 @@ func (client *ResourceClient) RegisterHandlers(handlers map[string]*ResourceHand
 	}
 }
 
-func (client *ResourceClient) Resource(resource string) Requestor {
+func (client *ResourceClient) Resource(resource string) Requester {
 	if _, ok := client.handlers[resource]; !ok {
 		panic(fmt.Sprintf("resource %s not registered on this instance of client", resource))
 	}
 	return MakeClientRequest(client, resource, client.referenceContext.Derive())
 }
 
-type Requestor interface {
-	WithQuery(query *typecast.ResourceQuery) Requestor
-	Read(query *typecast.ResourceQuery) ([]typecast.Resource, error)
-	ReadOne(id string, query *typecast.ResourceQuery) (typecast.Resource, error)
-	Create(payload []typecast.Resource) ([]typecast.Resource, error)
-	Update(id string, payload []typecast.PatchOperation) (typecast.Resource, error)
+type Requester interface {
+	WithQuery(query *resource.Query) Requester
+	Read(query *resource.Query) ([]resource.Resourcer, error)
+	ReadOne(id string, query *resource.Query) (resource.Resourcer, error)
+	Create(payload []resource.Resourcer) ([]resource.Resourcer, error)
+	Update(id string, payload []typecast.PatchOperation) (resource.Resourcer, error)
 }
 
 type Request struct {
-	query    *typecast.ResourceQuery
+	query    *resource.Query
 	client   *ResourceClient
 	resource string
 	context  *req.Ctx
@@ -96,7 +97,7 @@ func (r *Request) GetContext() *req.Ctx {
 	return r.context
 }
 
-func (r *Request) WithQuery(query *typecast.ResourceQuery) Requestor {
+func (r *Request) WithQuery(query *resource.Query) Requester {
 
 	return &Request{
 		query:    query,
@@ -106,11 +107,11 @@ func (r *Request) WithQuery(query *typecast.ResourceQuery) Requestor {
 	}
 }
 
-func (r *Request) Read(query *typecast.ResourceQuery) ([]typecast.Resource, error) {
+func (r *Request) Read(query *resource.Query) ([]resource.Resourcer, error) {
 	return r.client.handlers[r.resource].Find(r.context, query)
 }
 
-func (r *Request) ReadOne(id string, query *typecast.ResourceQuery) (typecast.Resource, error) {
+func (r *Request) ReadOne(id string, query *resource.Query) (resource.Resourcer, error) {
 	if query.Filter == nil {
 		query.Filter = map[string]string{}
 	}
@@ -125,76 +126,10 @@ func (r *Request) ReadOne(id string, query *typecast.ResourceQuery) (typecast.Re
 	return out[0], nil
 }
 
-func (r *Request) Create(payload []typecast.Resource) ([]typecast.Resource, error) {
+func (r *Request) Create(payload []resource.Resourcer) ([]resource.Resourcer, error) {
 	return r.client.handlers[r.resource].Create(r.context, payload)
 }
 
-func (r *Request) Update(id string, payload []typecast.PatchOperation) (typecast.Resource, error) {
+func (r *Request) Update(id string, payload []typecast.PatchOperation) (resource.Resourcer, error) {
 	return r.client.handlers[r.resource].Update(r.context, id, payload, r.query)
 }
-
-/*
-// Simplifies tests by providing a mock implementation
-type MockSystemClient struct {
-	mock.Mock
-}
-
-func (msc *MockSystemClient) ScopeToToken(token *access.AuthenticationToken) RequestProducer {
-	msc.Called(token)
-	return msc
-}
-
-func (msc *MockSystemClient) Resource(name string) Requestor {
-	args := msc.Called(name)
-	return args.Get(0).(*MockRequest)
-}
-
-func (msc *MockSystemClient) RegisterHandlers(handlers map[string]*ResourceHandle) {
-	msc.Called(handlers)
-}
-
-type MockRequest struct {
-	mock.Mock
-}
-
-func (mr *MockRequest) WithQuery(query *typecast.ResourceQuery) Requestor {
-	mr.Called(query)
-	return mr
-}
-
-func (mr *MockRequest) Read(query *typecast.ResourceQuery) ([]typecast.Resource, error) {
-	args := mr.Called(query)
-	face := args.Get(0)
-	if face != nil {
-		return face.([]typecast.Resource), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (mr *MockRequest) ReadOne(id string, query *typecast.ResourceQuery) (typecast.Resource, error) {
-	args := mr.Called(id, query)
-	face := args.Get(0)
-	if face != nil {
-		return face.(typecast.Resource), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (mr *MockRequest) Create(payload []typecast.Resource) ([]typecast.Resource, error) {
-	args := mr.Called(payload)
-	face := args.Get(0)
-	if face != nil {
-		return face.([]typecast.Resource), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (mr *MockRequest) Update(id string, payload []typecast.PatchOperation) (typecast.Resource, error) {
-	args := mr.Called(id, payload)
-	face := args.Get(0)
-	if face != nil {
-		return face.(typecast.Resource), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-*/

@@ -3,14 +3,14 @@ package req
 import (
 	"context"
 	"github.com/MereleDulci/resto/pkg/constants"
-	"github.com/MereleDulci/resto/pkg/typecast"
+	"github.com/MereleDulci/resto/pkg/resource"
 )
 
-type Clonable interface {
-	Clone() Clonable
+type Cloner interface {
+	Clone() Cloner
 }
 
-func Clone[T Clonable](t T) T {
+func Clone[T Cloner](t T) T {
 	return t.Clone().(T)
 }
 
@@ -25,20 +25,20 @@ const (
 	MethodDelete = "DELETE"
 )
 
-func MakeNewCtx() *Ctx {
+func NewCtx() *Ctx {
 	return &Ctx{
 		locals: &Locals{values: map[string]interface{}{}},
-		query:  typecast.MakeResourceQuery(),
+		query:  resource.NewQuery(),
 	}
 }
 
 type Ctx struct {
 	id                  string
 	method              string
-	query               *typecast.ResourceQuery
+	query               *resource.Query
 	locals              *Locals
 	payload             interface{}
-	authenticationToken Clonable
+	authenticationToken Cloner
 	userContext         context.Context
 }
 
@@ -51,20 +51,20 @@ func (c *Ctx) SetId(id string) *Ctx {
 	return c
 }
 
-func (c *Ctx) Query() *typecast.ResourceQuery {
+func (c *Ctx) Query() *resource.Query {
 	return c.query
 }
 
-func (c *Ctx) SetQuery(query *typecast.ResourceQuery) *Ctx {
+func (c *Ctx) SetQuery(query *resource.Query) *Ctx {
 	c.query = query
 	return c
 }
 
-func (c *Ctx) Authentication() Clonable {
+func (c *Ctx) Authentication() Cloner {
 	return c.authenticationToken
 }
 
-func (c *Ctx) SetAuthentication(token Clonable) *Ctx {
+func (c *Ctx) SetAuthentication(token Cloner) *Ctx {
 	c.authenticationToken = token
 	return c
 }
@@ -79,7 +79,7 @@ func (c *Ctx) SetPayload(p interface{}) *Ctx {
 }
 
 func (c *Ctx) Derive() *Ctx {
-	next := MakeNewCtx().
+	next := NewCtx().
 		SetUserContext(context.Background()).
 		SetAuthentication(Clone(c.Authentication()))
 	next.Locals(constants.LocalsRequestID, c.Locals(constants.LocalsRequestID))

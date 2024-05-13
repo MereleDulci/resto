@@ -713,7 +713,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
 			{
-				Op:    PatchOpAdd,
+				Op:    constants.PatchOpAdd,
 				Path:  "/slice",
 				Value: "string value",
 			},
@@ -739,7 +739,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
 			{
-				Op:    PatchOpRemove,
+				Op:    constants.PatchOpRemove,
 				Path:  "/slice",
 				Value: "string value",
 			},
@@ -766,12 +766,12 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
 			{
-				Op:    PatchOpAdd,
+				Op:    constants.PatchOpAdd,
 				Path:  "/slice",
 				Value: "string value",
 			},
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/plain",
 				Value: "string value",
 			},
@@ -798,12 +798,12 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/rel",
 				Value: oid.Hex(),
 			},
 			{
-				Op:    PatchOpAdd,
+				Op:    constants.PatchOpAdd,
 				Path:  "/multirel",
 				Value: oid.Hex(),
 			},
@@ -841,7 +841,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/multirel",
 				Value: []string{hex},
 			},
@@ -874,22 +874,22 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/rel",
 				Value: oid,
 			},
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/stamp",
 				Value: timestamp,
 			},
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/legit",
 				Value: true,
 			},
 			{
-				Op:    PatchOpReplace,
+				Op:    constants.PatchOpReplace,
 				Path:  "/count",
 				Value: 1,
 			},
@@ -917,7 +917,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 		}{}))
 
 		update, err := tc.PatchToDBOps([]PatchOperation{
-			{Op: PatchOpReplace, Path: "/stamp", Value: nil},
+			{Op: constants.PatchOpReplace, Path: "/stamp", Value: nil},
 		})
 		assert.Nil(t, err)
 		assert.Equal(t, 1, len(update), "expected update to have 1 element")
