@@ -3,8 +3,8 @@ package resto
 import (
 	"fmt"
 	"github.com/MereleDulci/resto/pkg/access"
+	"github.com/MereleDulci/resto/pkg/collection"
 	"github.com/MereleDulci/resto/pkg/req"
-	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -63,15 +63,15 @@ func (client *ResourceClient) Resource(resource string) Requester {
 }
 
 type Requester interface {
-	WithQuery(query *resource.Query) Requester
-	Read(query *resource.Query) ([]resource.Resourcer, error)
-	ReadOne(id string, query *resource.Query) (resource.Resourcer, error)
-	Create(payload []resource.Resourcer) ([]resource.Resourcer, error)
-	Update(id string, payload []typecast.PatchOperation) (resource.Resourcer, error)
+	WithQuery(query *collection.Query) Requester
+	Read(query *collection.Query) ([]collection.Resourcer, error)
+	ReadOne(id string, query *collection.Query) (collection.Resourcer, error)
+	Create(payload []collection.Resourcer) ([]collection.Resourcer, error)
+	Update(id string, payload []typecast.PatchOperation) (collection.Resourcer, error)
 }
 
 type Request struct {
-	query    *resource.Query
+	query    *collection.Query
 	client   *ResourceClient
 	resource string
 	context  *req.Ctx
@@ -97,7 +97,7 @@ func (r *Request) GetContext() *req.Ctx {
 	return r.context
 }
 
-func (r *Request) WithQuery(query *resource.Query) Requester {
+func (r *Request) WithQuery(query *collection.Query) Requester {
 
 	return &Request{
 		query:    query,
@@ -107,11 +107,11 @@ func (r *Request) WithQuery(query *resource.Query) Requester {
 	}
 }
 
-func (r *Request) Read(query *resource.Query) ([]resource.Resourcer, error) {
+func (r *Request) Read(query *collection.Query) ([]collection.Resourcer, error) {
 	return r.client.handlers[r.resource].Find(r.context, query)
 }
 
-func (r *Request) ReadOne(id string, query *resource.Query) (resource.Resourcer, error) {
+func (r *Request) ReadOne(id string, query *collection.Query) (collection.Resourcer, error) {
 	if query.Filter == nil {
 		query.Filter = map[string]string{}
 	}
@@ -126,10 +126,10 @@ func (r *Request) ReadOne(id string, query *resource.Query) (resource.Resourcer,
 	return out[0], nil
 }
 
-func (r *Request) Create(payload []resource.Resourcer) ([]resource.Resourcer, error) {
+func (r *Request) Create(payload []collection.Resourcer) ([]collection.Resourcer, error) {
 	return r.client.handlers[r.resource].Create(r.context, payload)
 }
 
-func (r *Request) Update(id string, payload []typecast.PatchOperation) (resource.Resourcer, error) {
+func (r *Request) Update(id string, payload []typecast.PatchOperation) (collection.Resourcer, error) {
 	return r.client.handlers[r.resource].Update(r.context, id, payload, r.query)
 }

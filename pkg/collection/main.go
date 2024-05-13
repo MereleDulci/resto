@@ -1,4 +1,4 @@
-package resource
+package collection
 
 import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -30,7 +30,7 @@ func NewQuery() *Query {
 	}
 }
 
-func GetOIDFromResource(resource Resourcer) primitive.ObjectID {
+func OIDFromReference(resource Resourcer) primitive.ObjectID {
 	var oid primitive.ObjectID
 	if resource.GetID() == "" {
 		return primitive.NilObjectID
@@ -51,10 +51,10 @@ func ParseTimestamp(stamp string) time.Time {
 	return t
 }
 
-func ExtractOIDsFromReferenceSlice[T Resourcer](refs []T) []primitive.ObjectID {
+func OIDsFromReferenceSlice[T Resourcer](refs []T) []primitive.ObjectID {
 	out := make([]primitive.ObjectID, len(refs))
 	for i, r := range refs {
-		out[i] = GetOIDFromResource(r)
+		out[i] = OIDFromReference(r)
 	}
 	return out
 }

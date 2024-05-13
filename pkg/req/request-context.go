@@ -2,8 +2,8 @@ package req
 
 import (
 	"context"
+	"github.com/MereleDulci/resto/pkg/collection"
 	"github.com/MereleDulci/resto/pkg/constants"
-	"github.com/MereleDulci/resto/pkg/resource"
 )
 
 type Cloner interface {
@@ -28,14 +28,14 @@ const (
 func NewCtx() *Ctx {
 	return &Ctx{
 		locals: &Locals{values: map[string]interface{}{}},
-		query:  resource.NewQuery(),
+		query:  collection.NewQuery(),
 	}
 }
 
 type Ctx struct {
 	id                  string
 	method              string
-	query               *resource.Query
+	query               *collection.Query
 	locals              *Locals
 	payload             interface{}
 	authenticationToken Cloner
@@ -51,11 +51,11 @@ func (c *Ctx) SetId(id string) *Ctx {
 	return c
 }
 
-func (c *Ctx) Query() *resource.Query {
+func (c *Ctx) Query() *collection.Query {
 	return c.query
 }
 
-func (c *Ctx) SetQuery(query *resource.Query) *Ctx {
+func (c *Ctx) SetQuery(query *collection.Query) *Ctx {
 	c.query = query
 	return c
 }

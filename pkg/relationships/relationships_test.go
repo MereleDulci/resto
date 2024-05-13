@@ -1,7 +1,7 @@
 package relationships
 
 import (
-	"github.com/MereleDulci/resto/pkg/resource"
+	"github.com/MereleDulci/resto/pkg/collection"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"reflect"
@@ -115,7 +115,7 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 	})
 
 	t.Run("it should return a list of ids from one-to-one reference on primaries", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{Avatar: &ref{ID: "1"}},
 			&main{Avatar: &ref{ID: "2"}},
 		}
@@ -125,7 +125,7 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 	})
 
 	t.Run("it should not crash for empty one-to-one references", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{},
 		}
 
@@ -133,7 +133,7 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 		assert.Equal(t, []string{}, ids)
 	})
 	t.Run("it should not include zero values for one-to-one references", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{Avatar: &ref{ID: ""}},
 			&main{Avatar: &ref{ID: "1"}},
 		}
@@ -143,7 +143,7 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 	})
 
 	t.Run("it should return a list of ids from one-to-many reference on primary", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{Images: []*ref{{ID: "1"}, {ID: "2"}}},
 			&main{Images: []*ref{{ID: "3"}, {ID: "4"}}},
 		}
@@ -153,7 +153,7 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 	})
 
 	t.Run("it should not include zero values for one-to-many references", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{Images: []*ref{{ID: ""}}},
 			&main{Images: []*ref{{ID: "1"}, {ID: ""}}},
 		}
@@ -162,7 +162,7 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 	})
 
 	t.Run("It should not crash on empty one-to-many references", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{},
 			&main{Images: []*ref{}},
 		}
@@ -181,12 +181,12 @@ func TestMergeWithIncluded(t *testing.T) {
 	})
 
 	t.Run("should correctly merge one-to-one relationships", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{Avatar: &ref{}},
 			&main{Avatar: &ref{ID: "1"}},
 			&main{Avatar: &ref{ID: "2"}},
 		}
-		secondary := []resource.Resourcer{
+		secondary := []collection.Resourcer{
 			&ref{ID: "1", Url: "https://example.com/1"},
 			&ref{ID: "3", Url: "https://example.com/3"},
 		}
@@ -200,12 +200,12 @@ func TestMergeWithIncluded(t *testing.T) {
 	})
 
 	t.Run("should correctly merge one-to-many relationships", func(t *testing.T) {
-		primary := []resource.Resourcer{
+		primary := []collection.Resourcer{
 			&main{Images: []*ref{}},
 			&main{Images: []*ref{{ID: "1"}}},
 			&main{Images: []*ref{{ID: "2"}, {ID: "3"}}},
 		}
-		secondary := []resource.Resourcer{
+		secondary := []collection.Resourcer{
 			&ref{ID: "1", Url: "https://example.com/1"},
 			&ref{ID: "3", Url: "https://example.com/3"},
 		}

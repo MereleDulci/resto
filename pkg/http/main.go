@@ -7,8 +7,8 @@ import (
 	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto"
 	"github.com/MereleDulci/resto/pkg/access"
+	"github.com/MereleDulci/resto/pkg/collection"
 	"github.com/MereleDulci/resto/pkg/req"
-	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"io"
 	"net/http"
@@ -181,9 +181,9 @@ func (h Handler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 			return
 		}
 
-		resourcesToCreate := make([]resource.Resourcer, len(payload))
+		resourcesToCreate := make([]collection.Resourcer, len(payload))
 		for i, p := range payload {
-			resourcesToCreate[i] = p.(resource.Resourcer)
+			resourcesToCreate[i] = p.(collection.Resourcer)
 		}
 
 		result, err := rh.Create(internalContext, resourcesToCreate)
