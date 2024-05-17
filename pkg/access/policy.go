@@ -1,22 +1,22 @@
 package access
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/MereleDulci/resto/pkg/req"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/samber/lo"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"reflect"
 	"slices"
 	"strings"
 )
 
 type PolicyName string
-type PolicyPredicate func(p AccessPolicy, ctx *req.Ctx) bool
-type ResolveAccessQuery func(p AccessPolicy, ctx *req.Ctx) (bson.D, error)
-type ExtendAuthenticationContext func(ctx *req.Ctx, collection *mongo.Collection) error
+type PolicyPredicate func(context.Context, resource.Req, AccessPolicy) bool
+type ResolveAccessQuery func(context.Context, resource.Req, AccessPolicy) (bson.D, error)
+type ExtendAuthenticationContext func(context.Context, resource.Req) error
 
 type AccessPolicy struct {
 	Name                        PolicyName
@@ -60,23 +60,23 @@ func (p AccessPolicy) OverrideCanDelete(predicate PolicyPredicate) AccessPolicy 
 }
 
 func IdentityPredicate(val bool) PolicyPredicate {
-	return func(p AccessPolicy, ctx *req.Ctx) bool {
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
 		return val
 	}
 }
 
 func IdentityQueryResolver(q bson.D) ResolveAccessQuery {
-	return func(p AccessPolicy, ctx *req.Ctx) (bson.D, error) {
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) (bson.D, error) {
 		return q, nil
 	}
 }
 
 func ComposeAccessQueryAnd(resolvers ...ResolveAccessQuery) ResolveAccessQuery {
-	return func(p AccessPolicy, ctx *req.Ctx) (bson.D, error) {
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) (bson.D, error) {
 		restriction := bson.A{}
 
 		for _, resolver := range resolvers {
-			q, err := resolver(p, ctx)
+			q, err := resolver(ctx, r, p)
 			if err != nil {
 				return nil, err
 			}
@@ -96,14 +96,14 @@ func ComposeAccessQueryAnd(resolvers ...ResolveAccessQuery) ResolveAccessQuery {
 }
 
 func AccessByConstantMatch(literal bson.D) ResolveAccessQuery {
-	return func(p AccessPolicy, ctx *req.Ctx) (bson.D, error) {
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) (bson.D, error) {
 		return literal, nil
 	}
 }
 
 func AccessByExactContextValueMatch(resourceField string, contextField string) ResolveAccessQuery {
-	return func(p AccessPolicy, ctx *req.Ctx) (bson.D, error) {
-		value := ctx.Locals(contextField)
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) (bson.D, error) {
+		value := ctx.Value(contextField)
 		if value == nil {
 			return nil, fmt.Errorf("context value %s not found", contextField)
 		}
@@ -113,8 +113,8 @@ func AccessByExactContextValueMatch(resourceField string, contextField string) R
 }
 
 func AccessByInclusiveContextSliceMatch(resourceField string, contextField string) ResolveAccessQuery {
-	return func(p AccessPolicy, ctx *req.Ctx) (bson.D, error) {
-		value := ctx.Locals(contextField)
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) (bson.D, error) {
+		value := ctx.Value(contextField)
 		if value == nil {
 			return nil, fmt.Errorf("context value %s not found", contextField)
 		}
@@ -127,12 +127,12 @@ func AccessByInclusiveContextSliceMatch(resourceField string, contextField strin
 	}
 }
 
-func AccessQueryByPolicy(policyList []AccessPolicy, ctx *req.Ctx) (bson.D, error) {
+func AccessQueryByPolicy(ctx context.Context, policyList []AccessPolicy, r resource.Req) (bson.D, error) {
 	restriction := bson.A{}
 
 	for _, policy := range policyList {
-		if policy.IsApplicable(policy, ctx) {
-			q, err := policy.ResolveAccessQuery(policy, ctx)
+		if policy.IsApplicable(ctx, r, policy) {
+			q, err := policy.ResolveAccessQuery(ctx, r, policy)
 			if err != nil {
 				return nil, err
 			}
@@ -151,11 +151,11 @@ func AccessQueryByPolicy(policyList []AccessPolicy, ctx *req.Ctx) (bson.D, error
 	}, nil
 }
 
-func MakeFilterApplicablePolicies(filterPredicate func(p AccessPolicy, ctx *req.Ctx) bool) func([]AccessPolicy, *req.Ctx, *mongo.Collection) ([]AccessPolicy, error) {
-	return func(allPolicies []AccessPolicy, ctx *req.Ctx, collection *mongo.Collection) ([]AccessPolicy, error) {
+func MakeFilterApplicablePolicies(filterPredicate func(ctx context.Context, r resource.Req, p AccessPolicy) bool) func(context.Context, []AccessPolicy, resource.Req) ([]AccessPolicy, error) {
+	return func(ctx context.Context, allPolicies []AccessPolicy, r resource.Req) ([]AccessPolicy, error) {
 		for _, p := range allPolicies {
 			if p.ExtendAuthenticationContext != nil {
-				err := p.ExtendAuthenticationContext(ctx, collection)
+				err := p.ExtendAuthenticationContext(ctx, r)
 				if err != nil {
 					return nil, err
 				}
@@ -163,22 +163,22 @@ func MakeFilterApplicablePolicies(filterPredicate func(p AccessPolicy, ctx *req.
 		}
 
 		return lo.Filter(allPolicies, func(policy AccessPolicy, i int) bool {
-			return policy.IsApplicable(policy, ctx) && filterPredicate(policy, ctx)
+			return policy.IsApplicable(ctx, r, policy) && filterPredicate(ctx, r, policy)
 		}), nil
 	}
 }
 
-var ReadPolicyFilter = MakeFilterApplicablePolicies(func(p AccessPolicy, ctx *req.Ctx) bool {
-	return p.CanRead != nil && p.CanRead(p, ctx)
+var ReadPolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+	return p.CanRead != nil && p.CanRead(ctx, r, p)
 })
-var CreatePolicyFilter = MakeFilterApplicablePolicies(func(p AccessPolicy, ctx *req.Ctx) bool {
-	return p.CanCreate != nil && p.CanCreate(p, ctx)
+var CreatePolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+	return p.CanCreate != nil && p.CanCreate(ctx, r, p)
 })
-var UpdatePolicyFilter = MakeFilterApplicablePolicies(func(p AccessPolicy, ctx *req.Ctx) bool {
-	return p.CanUpdate != nil && p.CanUpdate(p, ctx)
+var UpdatePolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+	return p.CanUpdate != nil && p.CanUpdate(ctx, r, p)
 })
-var DeletePolicyFilter = MakeFilterApplicablePolicies(func(p AccessPolicy, ctx *req.Ctx) bool {
-	return p.CanDelete != nil && p.CanDelete(p, ctx)
+var DeletePolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+	return p.CanDelete != nil && p.CanDelete(ctx, r, p)
 })
 
 func GetWhitelistFromMapping(mapping map[PolicyName][]string, applicablePolicies []AccessPolicy) []string {

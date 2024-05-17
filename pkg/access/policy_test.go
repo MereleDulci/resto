@@ -1,8 +1,9 @@
 package access
 
 import (
+	"context"
 	"errors"
-	"github.com/MereleDulci/resto/pkg/req"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,13 +22,13 @@ func TestGetWhitelistFromMapping(t *testing.T) {
 		}, []AccessPolicy{
 			{
 				Name: "applicable",
-				IsApplicable: func(p AccessPolicy, ctx *req.Ctx) bool {
+				IsApplicable: func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
 					return true
 				},
 			},
 			{
 				Name: "additional",
-				IsApplicable: func(p AccessPolicy, ctx *req.Ctx) bool {
+				IsApplicable: func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
 					return true
 				},
 			},
@@ -41,7 +42,7 @@ func TestGetWhitelistFromMapping(t *testing.T) {
 		fields := GetWhitelistFromMapping(map[PolicyName][]string{}, []AccessPolicy{
 			{
 				Name: "not-applicable",
-				IsApplicable: func(p AccessPolicy, ctx *req.Ctx) bool {
+				IsApplicable: func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
 					return false
 				},
 			},
@@ -423,9 +424,8 @@ func TestAccessByExactContextValueMatch(t *testing.T) {
 
 	t.Run("it should return a query exactly matching the field provided to context value provided", func(t *testing.T) {
 		matcher := AccessByExactContextValueMatch("chatThread", "ownThreads")
-		ctx := req.NewCtx()
-		ctx.Locals("ownThreads", "123")
-		query, err := matcher(AccessPolicy{}, ctx)
+		ctx := context.WithValue(context.Background(), "ownThreads", "123")
+		query, err := matcher(ctx, resource.NewReq(), AccessPolicy{})
 		assert.Nil(t, err)
 		assert.Equal(t, bson.D{{"chatThread", "123"}}, query)
 	})
@@ -433,9 +433,9 @@ func TestAccessByExactContextValueMatch(t *testing.T) {
 	t.Run("It should fail if required context value is not found", func(t *testing.T) {
 
 		matcher := AccessByExactContextValueMatch("chatThread", "ownThreads")
-		ctx := req.NewCtx()
-		query, err := matcher(AccessPolicy{}, ctx)
-		assert.Nil(t, query)
+		ctx := context.Background()
+		query, err := matcher(ctx, resource.NewReq(), AccessPolicy{})
+		assert.Equal(t, 0, len(query))
 		assert.Error(t, err, "context value ownThreads not found")
 	})
 }
@@ -444,17 +444,16 @@ func TestAccessByInclusiveContextSliceMatch(t *testing.T) {
 
 	t.Run("it should return a query matching context slice to resource field using $in operator", func(t *testing.T) {
 		matcher := AccessByInclusiveContextSliceMatch("chatThread", "knownThreads")
-		ctx := req.NewCtx()
-		ctx.Locals("knownThreads", []string{"123", "456"})
-		query, err := matcher(AccessPolicy{}, ctx)
+		ctx := context.WithValue(context.Background(), "knownThreads", []string{"123", "456"})
+		query, err := matcher(ctx, resource.NewReq(), AccessPolicy{})
 		assert.Nil(t, err)
 		assert.Equal(t, bson.D{{"chatThread", bson.D{{"$in", []string{"123", "456"}}}}}, query)
 	})
 
 	t.Run("it should fail if required context value is not found", func(t *testing.T) {
 		matcher := AccessByInclusiveContextSliceMatch("chatThread", "knownThreads")
-		ctx := req.NewCtx()
-		query, err := matcher(AccessPolicy{}, ctx)
+		ctx := context.Background()
+		query, err := matcher(ctx, resource.NewReq(), AccessPolicy{})
 		assert.Nil(t, query)
 		assert.Error(t, err, "context value knownThreads not found")
 	})

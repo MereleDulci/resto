@@ -1,19 +1,19 @@
 package hook
 
 import (
-	"github.com/MereleDulci/resto/pkg/collection"
-	"github.com/MereleDulci/resto/pkg/req"
+	"context"
+	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 )
 
-type BeforeRead func(*req.Ctx, *collection.Query) (*collection.Query, error)
-type BeforeCreate func(*req.Ctx, collection.Resourcer) (collection.Resourcer, error)
-type BeforeUpdate func(*req.Ctx, []typecast.PatchOperation) ([]typecast.PatchOperation, error)
-type BeforeDelete func(*req.Ctx, collection.Resourcer) error
+type BeforeRead func(context.Context, resource.Req) (resource.Req, error)
+type BeforeCreate func(context.Context, resource.Req, resource.Resourcer) (resource.Req, resource.Resourcer, error)
+type BeforeUpdate func(context.Context, resource.Req, []typecast.PatchOperation) (resource.Req, []typecast.PatchOperation, error)
+type BeforeDelete func(context.Context, resource.Req, resource.Resourcer) (resource.Req, error)
 
-type After func(*req.Ctx, collection.Resourcer) (collection.Resourcer, error)
-type AfterDelete func(*req.Ctx, collection.Resourcer) error
-type AfterAll func(*req.Ctx, []collection.Resourcer) ([]collection.Resourcer, error)
+type After func(context.Context, resource.Req, resource.Resourcer) (resource.Resourcer, error)
+type AfterDelete func(context.Context, resource.Req, resource.Resourcer) error
+type AfterAll func(context.Context, resource.Req, []resource.Resourcer) ([]resource.Resourcer, error)
 
 func NewRegistry() Registry {
 	return Registry{}
@@ -66,105 +66,104 @@ func (hr *Registry) RegisterBeforeDelete(hook BeforeDelete) {
 	hr.beforeDeletes = append(hr.beforeDeletes, hook)
 }
 
-func (hr *Registry) RunBeforeCreates(c *req.Ctx, r collection.Resourcer) (collection.Resourcer, error) {
-	nextResource := r
+func (hr *Registry) RunBeforeCreates(ctx context.Context, r resource.Req, record resource.Resourcer) (resource.Req, resource.Resourcer, error) {
+	nextRecord := record
 	var err error
 	for _, hook := range hr.beforeCreates {
-		nextResource, err = hook(c, nextResource)
+		r, nextRecord, err = hook(ctx, r, nextRecord)
 		if err != nil {
-			return nil, err
+			return r, nil, err
 		}
 	}
-	return r, nil
+	return r, nextRecord, nil
 }
 
-func (hr *Registry) RunAfterCreates(c *req.Ctx, r collection.Resourcer) (collection.Resourcer, error) {
-	nextResource := r
+func (hr *Registry) RunAfterCreates(ctx context.Context, r resource.Req, record resource.Resourcer) (resource.Resourcer, error) {
+	nextRecord := record
 	var err error
 	for _, hook := range hr.afterCreates {
-		nextResource, err = hook(c, nextResource)
+		nextRecord, err = hook(ctx, r, nextRecord)
 		if err != nil {
 			return nil, err
+		}
+	}
+	return nextRecord, nil
+}
+
+func (hr *Registry) RunBeforeReads(ctx context.Context, r resource.Req) (resource.Req, error) {
+	var err error
+	for _, hook := range hr.beforeReads {
+		r, err = hook(ctx, r)
+		if err != nil {
+			return r, err
 		}
 	}
 	return r, nil
 }
 
-func (hr *Registry) RunBeforeReads(c *req.Ctx, query *collection.Query) (*collection.Query, error) {
-	var err error
-	nextQuery := query
-	for _, hook := range hr.beforeReads {
-		nextQuery, err = hook(c, nextQuery)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return nextQuery, nil
-}
-
-func (hr *Registry) RunAfterReads(c *req.Ctx, r collection.Resourcer) (collection.Resourcer, error) {
-	nextResource := r
+func (hr *Registry) RunAfterReads(ctx context.Context, r resource.Req, record resource.Resourcer) (resource.Resourcer, error) {
+	nextRecord := record
 	var err error
 	for _, hook := range hr.afterReads {
-		nextResource, err = hook(c, nextResource)
+		nextRecord, err = hook(ctx, r, nextRecord)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return r, nil
+	return nextRecord, nil
 }
 
-func (hr *Registry) RunAfterReadAll(c *req.Ctx, rs []collection.Resourcer) ([]collection.Resourcer, error) {
-	nextResources := rs
+func (hr *Registry) RunAfterReadAll(ctx context.Context, r resource.Req, records []resource.Resourcer) ([]resource.Resourcer, error) {
+	nextRecords := records
 	var err error
 	for _, hook := range hr.afterReadAlls {
-		nextResources, err = hook(c, nextResources)
+		nextRecords, err = hook(ctx, r, nextRecords)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return rs, nil
+	return nextRecords, nil
 }
 
-func (hr *Registry) RunBeforeUpdates(c *req.Ctx, ops []typecast.PatchOperation) ([]typecast.PatchOperation, error) {
+func (hr *Registry) RunBeforeUpdates(ctx context.Context, r resource.Req, ops []typecast.PatchOperation) (resource.Req, []typecast.PatchOperation, error) {
 	var err error
 	nextOps := ops
 	for _, hook := range hr.beforeUpdates {
-		nextOps, err = hook(c, nextOps)
+		r, nextOps, err = hook(ctx, r, nextOps)
+		if err != nil {
+			return r, nil, err
+		}
+	}
+	return r, nextOps, nil
+}
+
+func (hr *Registry) RunAfterUpdates(ctx context.Context, r resource.Req, record resource.Resourcer) (resource.Resourcer, error) {
+	nextRecord := record
+	var err error
+	for _, hook := range hr.afterUpdates {
+		nextRecord, err = hook(ctx, r, nextRecord)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return nextOps, nil
+	return nextRecord, nil
 }
 
-func (hr *Registry) RunAfterUpdates(c *req.Ctx, r collection.Resourcer) (collection.Resourcer, error) {
-	nextResource := r
+func (hr *Registry) RunBeforeDeletes(ctx context.Context, r resource.Req, record resource.Resourcer) (resource.Req, error) {
 	var err error
-	for _, hook := range hr.afterUpdates {
-		nextResource, err = hook(c, nextResource)
+	for _, hook := range hr.beforeDeletes {
+		r, err = hook(ctx, r, record)
 		if err != nil {
-			return nil, err
+			return r, err
 		}
 	}
 	return r, nil
 }
 
-func (hr *Registry) RunBeforeDeletes(c *req.Ctx, r collection.Resourcer) error {
-	var err error
-	for _, hook := range hr.beforeDeletes {
-		err = hook(c, r)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (hr *Registry) RunAfterDeletes(c *req.Ctx, r collection.Resourcer) error {
+func (hr *Registry) RunAfterDeletes(ctx context.Context, r resource.Req, record resource.Resourcer) error {
 	var err error
 	for _, hook := range hr.afterDeletes {
-		err = hook(c, r)
+		err = hook(ctx, r, record)
 		if err != nil {
 			return err
 		}
