@@ -123,6 +123,9 @@ func (c Req) WithMethod(method string) Req {
 }
 
 func (c Req) Token() *Token {
+	if c.token == nil {
+		return &Token{}
+	}
 	return c.token
 }
 

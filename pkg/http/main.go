@@ -15,17 +15,22 @@ import (
 	"strings"
 )
 
-func NewHandler(handlers map[string]*resto.ResourceHandle, authenticator func(*http.Request) *resource.Token, errchan chan error) Handler {
+type Authenticator func(*http.Request) *resource.Token
+type ErrorHandler func(w http.ResponseWriter, r *http.Request, suggestedCode int, err error) error
+
+func NewHandler(handlers map[string]*resto.ResourceHandle, authenticator Authenticator, errHandler ErrorHandler, errchan chan error) Handler {
 	return Handler{
 		handlers,
 		authenticator,
+		errHandler,
 		errchan,
 	}
 }
 
 type Handler struct {
 	handlers      map[string]*resto.ResourceHandle
-	authenticator func(*http.Request) *resource.Token
+	authenticator Authenticator
+	errhandler    ErrorHandler
 	errchan       chan error
 }
 
@@ -66,20 +71,18 @@ func (h Handler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerFunc 
 		results, err := rh.Find(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithQuery(query))
 
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
 
 		buf, err := jsonapi.MarshalMany(results)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
@@ -106,10 +109,9 @@ func (h Handler) makeFindOneHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 
 		results, err := rh.Find(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithQuery(query).WithId(r.PathValue("id")))
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
@@ -121,10 +123,9 @@ func (h Handler) makeFindOneHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 
 		buf, err := jsonapi.Marshal(results[0])
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
@@ -149,20 +150,18 @@ func (h Handler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 
 		rawBody, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
 
 		payload, err := jsonapi.UnmarshalManyAsType(rawBody, rh.GetResourceReflectType())
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
@@ -174,20 +173,18 @@ func (h Handler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 
 		result, err := rh.Create(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithQuery(query).WithPayload(resourcesToCreate))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
 
 		buf, err := jsonapi.Marshal(result)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
@@ -212,40 +209,36 @@ func (h Handler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 
 		rawBody, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
 
 		patch := make([]typecast.PatchOperation, 0)
 		if err := json.Unmarshal(rawBody, &patch); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
 
 		resource, err := rh.Update(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithId(r.PathValue("id")).WithQuery(query).WithPayload(patch))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
 
 		buf, err := jsonapi.Marshal(resource)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
@@ -262,10 +255,9 @@ func (h Handler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 func (h Handler) makeDeleteHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := rh.Delete(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithId(r.PathValue("id"))); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, err := io.WriteString(w, err.Error())
-			if err != nil {
-				h.errchan <- err
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
 			}
 			return
 		}
