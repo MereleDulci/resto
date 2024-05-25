@@ -17,21 +17,36 @@ import (
 
 type Authenticator func(*http.Request) *resource.Token
 type ErrorHandler func(w http.ResponseWriter, r *http.Request, suggestedCode int, err error) error
+type Middleware func(http.HandlerFunc) http.HandlerFunc
 
 func NewHandler(handlers map[string]*resto.ResourceHandle, authenticator Authenticator, errHandler ErrorHandler, errchan chan error) Handler {
 	return Handler{
-		handlers,
-		authenticator,
-		errHandler,
-		errchan,
+		handlers:      handlers,
+		mw:            make([]Middleware, 0),
+		authenticator: authenticator,
+		errhandler:    errHandler,
+		errchan:       errchan,
 	}
 }
 
 type Handler struct {
 	handlers      map[string]*resto.ResourceHandle
+	mw            []Middleware
 	authenticator Authenticator
 	errhandler    ErrorHandler
 	errchan       chan error
+}
+
+func (h Handler) Use(mw ...Middleware) Handler {
+	h.mw = append(h.mw, mw...)
+	return h
+}
+
+func (h Handler) composeMw(next http.HandlerFunc) http.HandlerFunc {
+	for i := len(h.mw) - 1; i >= 0; i-- {
+		next = h.mw[i](next)
+	}
+	return next
 }
 
 func (h Handler) AttachMux(ns string, mux *http.ServeMux) Handler {
@@ -48,11 +63,11 @@ func (h Handler) AttachMux(ns string, mux *http.ServeMux) Handler {
 			baseUrl = fmt.Sprintf("/%s/%s", strings.Trim(ns, "/"), strings.Trim(baseUrl, "/"))
 		}
 
-		mux.HandleFunc("GET "+baseUrl, h.makeFindManyHandler(rh))
-		mux.HandleFunc("GET "+baseUrl+"/{id}", h.makeFindOneHandler(rh))
-		mux.HandleFunc("POST "+baseUrl, h.makeCreateHandler(rh))
-		mux.HandleFunc("PATCH "+baseUrl+"/{id}", h.makeUpdateHandler(rh))
-		mux.HandleFunc("DELETE "+baseUrl+"/{id}", h.makeDeleteHandler(rh))
+		mux.HandleFunc("GET "+baseUrl, h.composeMw(h.makeFindManyHandler(rh)))
+		mux.HandleFunc("GET "+baseUrl+"/{id}", h.composeMw(h.makeFindOneHandler(rh)))
+		mux.HandleFunc("POST "+baseUrl, h.composeMw(h.makeCreateHandler(rh)))
+		mux.HandleFunc("PATCH "+baseUrl+"/{id}", h.composeMw(h.makeUpdateHandler(rh)))
+		mux.HandleFunc("DELETE "+baseUrl+"/{id}", h.composeMw(h.makeDeleteHandler(rh)))
 	}
 	return h
 }
