@@ -1,12 +1,5 @@
-github.com/MereleDulci/jsonapi v0.0.1 h1:eIRR0H1kIdN2qxzRRPJr96ilpw/Km9DYSIbxhdOcLZA=
-github.com/MereleDulci/jsonapi v0.0.1/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
-github.com/MereleDulci/jsonapi v0.0.2-0.20240329164019-7750aaea3461/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
-github.com/MereleDulci/jsonapi v0.0.2 h1:c4hBdV3HG7HakkxOdh/3BZ37meJKQ2ZAQW6dyPXnLXI=
-github.com/MereleDulci/jsonapi v0.0.2/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
-github.com/MereleDulci/jsonapi v0.0.3 h1:wcGG8PP2hhOJ3bXXTUXHYA7ZMhAoOhTMxRBULEpQocg=
-github.com/MereleDulci/jsonapi v0.0.3/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
-github.com/MereleDulci/jsonapi v0.0.4 h1:bkJOXStUJMdxnrnqsRX3bW+y6S6OgWtkIISPc+ofiXc=
-github.com/MereleDulci/jsonapi v0.0.4/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
+github.com/MereleDulci/jsonapi v0.0.5 h1:Le8d4dr1Oz8CUxi/tfjfMYJX0PC7J99jmFYY11Ihp0U=
+github.com/MereleDulci/jsonapi v0.0.5/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
