@@ -84,7 +84,7 @@ func (r Request) ReadOne(ctx context.Context, id string, query resource.Query) (
 	}
 	query.Filter["id"] = id
 
-	rq := resource.NewReq().WithToken(r.client.referenceToken).WithQuery(query)
+	rq := resource.NewReq().WithToken(r.client.referenceToken).WithId(id).WithQuery(query)
 	out, err := r.client.handlers[r.resource].Find(ctx, rq)
 	if err != nil {
 		return nil, err

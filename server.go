@@ -212,7 +212,7 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 	ctx, cancel := context.WithTimeout(ctx, rh.timeouts.ReadsTimeout)
 	defer cancel()
 
-	r = r.WithMethod(MethodGet).WithId(primitive.NewObjectID().Hex())
+	r = r.WithMethod(MethodGet)
 
 	reschan := make(chan ReadResult)
 	defer close(reschan)
@@ -408,7 +408,7 @@ func (rh *ResourceHandle) Create(ctx context.Context, r resource.Req) ([]resourc
 	ctx, cancel := context.WithTimeout(ctx, rh.timeouts.WritesTimeout)
 	defer cancel()
 
-	r = r.WithMethod(MethodPost).WithId(primitive.NewObjectID().Hex())
+	r = r.WithMethod(MethodPost)
 	resources, ok := r.Payload().([]resource.Resourcer)
 	if !ok {
 		return nil, errors.New("invalid payload")
@@ -527,7 +527,7 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 	ctx, cancel := context.WithTimeout(ctx, rh.timeouts.WritesTimeout)
 	defer cancel()
 
-	r = r.WithMethod(MethodPatch).WithId(primitive.NewObjectID().Hex())
+	r = r.WithMethod(MethodPatch)
 	id := r.Id()
 	query := r.Query()
 	operations, ok := r.Payload().([]typecast.PatchOperation)
@@ -703,7 +703,7 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 	ctx, cancel := context.WithTimeout(ctx, rh.timeouts.WritesTimeout)
 	defer cancel()
 
-	r = r.WithMethod(MethodDelete).WithId(primitive.NewObjectID().Hex())
+	r = r.WithMethod(MethodDelete)
 	id := r.Id()
 
 	reschan := make(chan DeleteResult)
