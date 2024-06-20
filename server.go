@@ -60,11 +60,11 @@ type ResourceHandler interface {
 	GetResourceName() string
 	GetResourceReflectType() reflect.Type
 	GetHooks() *hook.Registry
-	Find(*resource.Req, *resource.Query) ([]resource.Resourcer, error)
-	Create(*resource.Req, []resource.Resourcer) ([]resource.Resourcer, error)
-	Update(*resource.Req, string, []typecast.PatchOperation, *resource.Query) (resource.Resourcer, error)
-	Delete(*resource.Req, string) error
-	Include(*resource.Req, []resource.Resourcer, *resource.Query) ([]resource.Resourcer, error)
+	Find(context.Context, resource.Req) ([]resource.Resourcer, error)
+	Create(context.Context, resource.Req) ([]resource.Resourcer, error)
+	Update(context.Context, resource.Req) (resource.Resourcer, error)
+	Delete(context.Context, resource.Req) error
+	Include(context.Context, []resource.Resourcer, resource.Req) ([]resource.Resourcer, error)
 }
 
 type Encoder struct {
