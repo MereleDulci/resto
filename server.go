@@ -215,9 +215,10 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 	r = r.WithMethod(MethodGet)
 
 	reschan := make(chan ReadResult)
-	defer close(reschan)
 
 	go func() {
+		defer close(reschan)
+
 		//Validate read access on the resource by the requestor in principle
 		applicablePolicies, err := access.ReadPolicyFilter(ctx, rh.encoder.Policies(), r)
 		if err != nil {
@@ -313,8 +314,6 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 		afterTransformChan := make(chan SingleHookResult)
 		orderIndex := 0
 		for cursor.Next(ctx) {
-			afterWg.Add(1)
-
 			result, err := rh.encoder.CursorDecoder(cursor)
 			if err != nil {
 				afterTransformChan <- SingleHookResult{nil, err, 0}
@@ -326,6 +325,8 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 				Str("resource", rh.ResourceType.String()).
 				Str("id", result.GetID()).
 				Msg("starting after transform for individual resource")
+
+			afterWg.Add(1)
 			go func(index int) {
 				if afterTransformed, err := rh.Hooks.RunAfterReads(ctx, r, result); err != nil {
 					afterTransformChan <- SingleHookResult{nil, err, 0}
@@ -415,9 +416,9 @@ func (rh *ResourceHandle) Create(ctx context.Context, r resource.Req) ([]resourc
 	}
 
 	var reschan = make(chan CreateResult)
-	defer close(reschan)
 
 	go func() {
+		defer close(reschan)
 
 		applicablePolicies, err := access.CreatePolicyFilter(ctx, rh.encoder.Policies(), r)
 		if err != nil {
@@ -536,9 +537,10 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 	}
 
 	reschan := make(chan UpdateResult)
-	defer close(reschan)
 
 	go func() {
+		defer close(reschan)
+
 		applicablePolicies, err := access.UpdatePolicyFilter(ctx, rh.encoder.Policies(), r)
 		if err != nil {
 			reschan <- UpdateResult{err: err}
@@ -707,9 +709,9 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 	id := r.Id()
 
 	reschan := make(chan DeleteResult)
-	defer close(reschan)
 
 	go func() {
+		defer close(reschan)
 		applicablePolicies, err := access.DeletePolicyFilter(ctx, rh.encoder.Policies(), r)
 		if err != nil {
 			reschan <- DeleteResult{err: err}
