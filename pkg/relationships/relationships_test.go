@@ -115,8 +115,14 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 	imageRef, _ := lo.Find(refs, func(includePath IncludePath) bool {
 		return includePath.Path == "images"
 	})
+	avatarValRef, _ := lo.Find(refs, func(includePath IncludePath) bool {
+		return includePath.Path == "valAvatar"
+	})
+	imageValRef, _ := lo.Find(refs, func(includePath IncludePath) bool {
+		return includePath.Path == "valImages"
+	})
 
-	t.Run("it should return a list of ids from one-to-one reference on primaries", func(t *testing.T) {
+	t.Run("it should return a list of ids from one-to-one ptr reference on primaries", func(t *testing.T) {
 		primary := []resource.Resourcer{
 			&main{Avatar: &ref{ID: "1"}},
 			&main{Avatar: &ref{ID: "2"}},
@@ -126,7 +132,17 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 		assert.Equal(t, []string{"1", "2"}, ids)
 	})
 
-	t.Run("it should not crash for empty one-to-one references", func(t *testing.T) {
+	t.Run("it should return a list of ids from one-to-one struct reference on primaries", func(t *testing.T) {
+		primary := []resource.Resourcer{
+			&main{ValAvatar: ref{ID: "1"}},
+			&main{ValAvatar: ref{ID: "2"}},
+		}
+
+		ids := GetReferencedIdsFromPrimary(primary, avatarValRef)
+		assert.Equal(t, []string{"1", "2"}, ids)
+	})
+
+	t.Run("it should not crash for empty one-to-one ptr references", func(t *testing.T) {
 		primary := []resource.Resourcer{
 			&main{},
 		}
@@ -134,7 +150,8 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 		ids := GetReferencedIdsFromPrimary(primary, avatarRef)
 		assert.Equal(t, []string{}, ids)
 	})
-	t.Run("it should not include zero values for one-to-one references", func(t *testing.T) {
+
+	t.Run("it should not include zero values for one-to-one ptr references", func(t *testing.T) {
 		primary := []resource.Resourcer{
 			&main{Avatar: &ref{ID: ""}},
 			&main{Avatar: &ref{ID: "1"}},
@@ -143,8 +160,17 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 		ids := GetReferencedIdsFromPrimary(primary, avatarRef)
 		assert.Equal(t, []string{"1"}, ids)
 	})
+	t.Run("it should not include zero values for one-to-one struct references", func(t *testing.T) {
+		primary := []resource.Resourcer{
+			&main{ValAvatar: ref{ID: ""}},
+			&main{ValAvatar: ref{ID: "1"}},
+		}
 
-	t.Run("it should return a list of ids from one-to-many reference on primary", func(t *testing.T) {
+		ids := GetReferencedIdsFromPrimary(primary, avatarValRef)
+		assert.Equal(t, []string{"1"}, ids)
+	})
+
+	t.Run("it should return a list of ids from one-to-many ptr reference on primary", func(t *testing.T) {
 		primary := []resource.Resourcer{
 			&main{Images: []*ref{{ID: "1"}, {ID: "2"}}},
 			&main{Images: []*ref{{ID: "3"}, {ID: "4"}}},
@@ -154,12 +180,31 @@ func TestGetReferencedIdsFromPrimary(t *testing.T) {
 		assert.Equal(t, []string{"1", "2", "3", "4"}, ids)
 	})
 
-	t.Run("it should not include zero values for one-to-many references", func(t *testing.T) {
+	t.Run("it should return a list of ids from one-to-many struct reference on primary", func(t *testing.T) {
+		primary := []resource.Resourcer{
+			&main{ValImages: []ref{{ID: "1"}, {ID: "2"}}},
+			&main{ValImages: []ref{{ID: "3"}, {ID: "4"}}},
+		}
+
+		ids := GetReferencedIdsFromPrimary(primary, imageValRef)
+		assert.Equal(t, []string{"1", "2", "3", "4"}, ids)
+	})
+
+	t.Run("it should not include zero values for one-to-many ptr references", func(t *testing.T) {
 		primary := []resource.Resourcer{
 			&main{Images: []*ref{{ID: ""}}},
 			&main{Images: []*ref{{ID: "1"}, {ID: ""}}},
 		}
 		ids := GetReferencedIdsFromPrimary(primary, imageRef)
+		assert.Equal(t, []string{"1"}, ids)
+	})
+
+	t.Run("it should not include zero values for one-to-many struct references", func(t *testing.T) {
+		primary := []resource.Resourcer{
+			&main{ValImages: []ref{{ID: ""}}},
+			&main{ValImages: []ref{{ID: "1"}, {ID: ""}}},
+		}
+		ids := GetReferencedIdsFromPrimary(primary, imageValRef)
 		assert.Equal(t, []string{"1"}, ids)
 	})
 

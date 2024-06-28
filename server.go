@@ -849,9 +849,11 @@ func (rh *ResourceHandle) Include(ctx context.Context, primary []resource.Resour
 
 		referencedIds := relationships.GetReferencedIdsFromPrimary(primary, referenceConfig)
 		if len(referencedIds) == 0 {
+			rh.log.Trace().Str("include_path", referenceConfig.LocalField).Msg("No referenced ids found")
 			continue
 		}
 
+		rh.log.Trace().Str("include_path", referenceConfig.LocalField).Interface("ids", referencedIds).Msg("Referenced ids")
 		secondary, err := scopedClient.Resource(referenceConfig.Resource).Read(ctx, resource.Query{
 			Filter: map[string]string{
 				fmt.Sprintf("%s[$in]", referenceConfig.RemoteField): strings.Join(referencedIds, ","),
@@ -862,6 +864,7 @@ func (rh *ResourceHandle) Include(ctx context.Context, primary []resource.Resour
 			return nil, err
 		}
 
+		rh.log.Trace().Str("include_path", referenceConfig.LocalField).Int("count", len(secondary)).Msg("Secondary resources")
 		mergeErr := relationships.MergeWithIncluded(primary, secondary, referenceConfig)
 		if mergeErr != nil {
 			return nil, mergeErr

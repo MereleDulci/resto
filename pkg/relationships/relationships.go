@@ -1,6 +1,7 @@
 package relationships
 
 import (
+	"fmt"
 	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/samber/lo"
 	"reflect"
@@ -125,7 +126,9 @@ func GetReferencedIdsFromPrimary(primary []resource.Resourcer, includeConfig Inc
 	for _, p := range primary {
 		refField := reflect.ValueOf(p).Elem().FieldByName(includeConfig.LocalField)
 
-		if refField.Kind() == reflect.Ptr {
+		switch refField.Kind() {
+		case reflect.Ptr:
+
 			if refField.IsNil() {
 				continue
 			}
@@ -134,23 +137,33 @@ func GetReferencedIdsFromPrimary(primary []resource.Resourcer, includeConfig Inc
 			if strVal != "" {
 				ids = append(ids, strVal)
 			}
-		}
+		case reflect.Struct:
+			refField = refField.FieldByName(includeConfig.RemoteField)
+			strVal := refField.String()
+			if strVal != "" {
+				ids = append(ids, strVal)
+			}
 
-		if refField.Kind() == reflect.Slice {
+		case reflect.Slice:
 			for i := 0; i < refField.Len(); i++ {
 				refElement := refField.Index(i)
 				if refElement.Kind() == reflect.Ptr {
 					if refElement.IsNil() {
 						continue
 					}
-					refElement = refElement.Elem().FieldByName(includeConfig.RemoteField)
-					strVal := refElement.String()
-					if strVal != "" {
-						ids = append(ids, strVal)
-					}
-				}
-			}
 
+					refElement = refElement.Elem()
+				}
+
+				refElement = refElement.FieldByName(includeConfig.RemoteField)
+				strVal := refElement.String()
+				if strVal != "" {
+					ids = append(ids, strVal)
+				}
+
+			}
+		default:
+			panic(fmt.Errorf("invalid reference field kind %v", refField.Kind()))
 		}
 
 	}
