@@ -180,20 +180,49 @@ func MergeWithIncluded(primary []resource.Resourcer, secondary []resource.Resour
 
 		}
 
+		if localField.Kind() == reflect.Struct {
+			strVal := localField.FieldByName(includeConfig.RemoteField).String()
+			replaceWith, ok := lo.Find(secondary, func(s resource.Resourcer) bool {
+				return s.GetID() == strVal
+			})
+
+			if ok && localField.CanSet() {
+				localField.Set(reflect.ValueOf(replaceWith).Elem())
+			}
+		}
+
 		if localField.Kind() == reflect.Slice {
 			//pick each slice element, find matching secondary for it. set at current index if found
 			for i := 0; i < localField.Len(); i++ {
-				elt := localField.Index(i).Elem()
+				v := localField.Index(i)
 
-				strId := elt.FieldByName(includeConfig.RemoteField).String()
+				switch v.Kind() {
+				case reflect.Ptr:
+					elt := v.Elem()
 
-				replaceWith, ok := lo.Find(secondary, func(s resource.Resourcer) bool {
-					return s.GetID() == strId
-				})
+					strId := elt.FieldByName(includeConfig.RemoteField).String()
 
-				if ok {
-					if elt.CanSet() {
-						elt.Set(reflect.ValueOf(replaceWith).Elem())
+					replaceWith, ok := lo.Find(secondary, func(s resource.Resourcer) bool {
+						return s.GetID() == strId
+					})
+
+					if ok {
+						if elt.CanSet() {
+							elt.Set(reflect.ValueOf(replaceWith).Elem())
+						}
+					}
+				case reflect.Struct:
+					elt := v
+					strId := elt.FieldByName(includeConfig.RemoteField).String()
+
+					replaceWith, ok := lo.Find(secondary, func(s resource.Resourcer) bool {
+						return s.GetID() == strId
+					})
+
+					if ok {
+						if elt.CanSet() {
+							elt.Set(reflect.ValueOf(replaceWith).Elem())
+						}
 					}
 				}
 

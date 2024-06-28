@@ -22,9 +22,11 @@ func (r *ref) InitID() {
 }
 
 type main struct {
-	ID     string `jsonapi:"primary,main"`
-	Images []*ref `jsonapi:"relation,images"`
-	Avatar *ref   `jsonapi:"relation,avatar"`
+	ID        string `jsonapi:"primary,main"`
+	Images    []*ref `jsonapi:"relation,images"`
+	Avatar    *ref   `jsonapi:"relation,avatar"`
+	ValImages []ref  `jsonapi:"relation,valImages"`
+	ValAvatar ref    `jsonapi:"relation,valAvatar"`
 }
 
 func (m *main) GetID() string {
@@ -179,8 +181,14 @@ func TestMergeWithIncluded(t *testing.T) {
 	imagesRef, _ := lo.Find(refs, func(includePath IncludePath) bool {
 		return includePath.Path == "images"
 	})
+	avatarValRef, _ := lo.Find(refs, func(includePath IncludePath) bool {
+		return includePath.Path == "valAvatar"
+	})
+	imagesValRef, _ := lo.Find(refs, func(includePath IncludePath) bool {
+		return includePath.Path == "valImages"
+	})
 
-	t.Run("should correctly merge one-to-one relationships", func(t *testing.T) {
+	t.Run("should correctly merge one-to-one pointer relationships", func(t *testing.T) {
 		primary := []resource.Resourcer{
 			&main{Avatar: &ref{}},
 			&main{Avatar: &ref{ID: "1"}},
@@ -197,6 +205,25 @@ func TestMergeWithIncluded(t *testing.T) {
 		assert.Equal(t, "", primary[0].(*main).Avatar.ID)
 		assert.Equal(t, "https://example.com/1", primary[1].(*main).Avatar.Url)
 		assert.Equal(t, "2", primary[2].(*main).Avatar.ID)
+	})
+
+	t.Run("should correctly merge one-to-one value relationships", func(t *testing.T) {
+		primary := []resource.Resourcer{
+			&main{ValAvatar: ref{}},
+			&main{ValAvatar: ref{ID: "1"}},
+			&main{ValAvatar: ref{ID: "2"}},
+		}
+		secondary := []resource.Resourcer{
+			&ref{ID: "1", Url: "https://example.com/1"},
+			&ref{ID: "3", Url: "https://example.com/3"},
+		}
+
+		mergeErr := MergeWithIncluded(primary, secondary, avatarValRef)
+		assert.Nil(t, mergeErr)
+
+		assert.Equal(t, "", primary[0].(*main).ValAvatar.ID)
+		assert.Equal(t, "https://example.com/1", primary[1].(*main).ValAvatar.Url)
+		assert.Equal(t, "2", primary[2].(*main).ValAvatar.ID)
 	})
 
 	t.Run("should correctly merge one-to-many relationships", func(t *testing.T) {
@@ -223,5 +250,30 @@ func TestMergeWithIncluded(t *testing.T) {
 		assert.Equal(t, "", primary[2].(*main).Images[0].Url)
 		assert.Equal(t, "https://example.com/3", primary[2].(*main).Images[1].Url)
 
+	})
+
+	t.Run("should correctly merge one-to-many value relationships", func(t *testing.T) {
+		primary := []resource.Resourcer{
+			&main{ValImages: []ref{}},
+			&main{ValImages: []ref{{ID: "1"}}},
+			&main{ValImages: []ref{{ID: "2"}, {ID: "3"}}},
+		}
+		secondary := []resource.Resourcer{
+			&ref{ID: "1", Url: "https://example.com/1"},
+			&ref{ID: "3", Url: "https://example.com/3"},
+		}
+
+		mergeErr := MergeWithIncluded(primary, secondary, imagesValRef)
+		assert.Nil(t, mergeErr)
+
+		assert.Equal(t, 0, len(primary[0].(*main).ValImages))
+		assert.Equal(t, 1, len(primary[1].(*main).ValImages))
+		assert.Equal(t, 2, len(primary[2].(*main).ValImages))
+
+		assert.Equal(t, "https://example.com/1", primary[1].(*main).ValImages[0].Url)
+
+		assert.Equal(t, "2", primary[2].(*main).ValImages[0].ID)
+		assert.Equal(t, "", primary[2].(*main).ValImages[0].Url)
+		assert.Equal(t, "https://example.com/3", primary[2].(*main).ValImages[1].Url)
 	})
 }
