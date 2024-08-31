@@ -530,7 +530,6 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 
 	r = r.WithMethod(MethodPatch)
 	id := r.Id()
-	query := r.Query()
 	operations, ok := r.Payload().([]typecast.PatchOperation)
 	if !ok {
 		return nil, errors.New("invalid payload")
@@ -606,7 +605,7 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 			Str("id", id).
 			Msg("before update hooks applied")
 
-		typeCastedQuery, err := rh.resourceTypeCast.Query(query.Filter)
+		typeCastedQuery, err := rh.resourceTypeCast.Query(r.Query().Filter)
 		if err != nil {
 			reschan <- UpdateResult{nil, err}
 			return
