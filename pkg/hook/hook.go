@@ -66,6 +66,10 @@ func (hr *Registry) RegisterBeforeDelete(hook BeforeDelete) {
 	hr.beforeDeletes = append(hr.beforeDeletes, hook)
 }
 
+func (hr *Registry) RegisterAfterDelete(hook AfterDelete) {
+	hr.afterDeletes = append(hr.afterDeletes, hook)
+}
+
 func (hr *Registry) RunBeforeCreates(ctx context.Context, r resource.Req, record resource.Resourcer) (resource.Req, resource.Resourcer, error) {
 	nextRecord := record
 	var err error
