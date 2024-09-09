@@ -58,10 +58,12 @@ type Requester interface {
 	ReadOne(ctx context.Context, id string, query resource.Query) (resource.Resourcer, error)
 	Create(ctx context.Context, payload []resource.Resourcer) ([]resource.Resourcer, error)
 	Update(ctx context.Context, id string, query resource.Query, payload []typecast.PatchOperation) (resource.Resourcer, error)
+	Delete(ctx context.Context, id string) error
+	Call(ctx context.Context, actionName string, query resource.Query, payload interface{}) ([]resource.Resourcer, error)
+	CallOn(ctx context.Context, actionName string, resourceId string, query resource.Query, payload interface{}) ([]resource.Resourcer, error)
 }
 
 type Request struct {
-	query    resource.Query
 	client   *ResourceClient
 	resource string
 }
@@ -103,4 +105,20 @@ func (r Request) Create(ctx context.Context, payload []resource.Resourcer) ([]re
 func (r Request) Update(ctx context.Context, id string, query resource.Query, payload []typecast.PatchOperation) (resource.Resourcer, error) {
 	rq := resource.NewReq().WithToken(r.client.referenceToken).WithId(id).WithQuery(query).WithPayload(payload)
 	return r.client.handlers[r.resource].Update(ctx, rq)
+}
+
+func (r Request) Delete(ctx context.Context, id string) error {
+	rq := resource.NewReq().WithToken(r.client.referenceToken).WithId(id)
+	return r.client.handlers[r.resource].Delete(ctx, rq)
+}
+
+func (r Request) Call(ctx context.Context, actionName string, query resource.Query, payload interface{}) ([]resource.Resourcer, error) {
+	rq := resource.NewReq().WithToken(r.client.referenceToken).WithQuery(query).WithPayload(payload)
+	return r.client.handlers[r.resource].Call(ctx, rq, actionName)
+}
+
+func (r Request) CallOn(ctx context.Context, actionName string, resourceId string, query resource.Query, payload interface{}) ([]resource.Resourcer, error) {
+	rq := resource.NewReq().WithToken(r.client.referenceToken).WithQuery(query).WithId(resourceId).WithPayload(payload)
+	return r.client.handlers[r.resource].CallOn(ctx, rq, actionName)
+
 }

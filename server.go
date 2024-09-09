@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/MereleDulci/resto/pkg/access"
+	"github.com/MereleDulci/resto/pkg/action"
 	"github.com/MereleDulci/resto/pkg/hook"
 	"github.com/MereleDulci/resto/pkg/relationships"
 	"github.com/MereleDulci/resto/pkg/resource"
@@ -81,6 +82,7 @@ type Encoder struct {
 type ResourceHandle struct {
 	ResourceType     reflect.Type
 	Hooks            hook.Registry
+	Actions          action.Registry
 	resourceTypeCast typecast.ResourceTypeCast
 	encoder          ResourceEncoder
 	collection       *mongo.Collection
@@ -144,6 +146,7 @@ func MakeResourceHandler(t reflect.Type, collection *mongo.Collection, accessPol
 	h := &ResourceHandle{
 		ResourceType:     t,
 		Hooks:            hook.NewRegistry(),
+		Actions:          action.NewRegistry(),
 		resourceTypeCast: typecast.MakeTypeCastFromResource(t.Elem()),
 		encoder:          encoder,
 		collection:       collection,
@@ -812,6 +815,58 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 			return res.err
 		}
 	}
+}
+
+func (rh *ResourceHandle) Call(ctx context.Context, r resource.Req, action string) ([]resource.Resourcer, error) {
+	if !rh.Actions.HasCollection(action) {
+		return nil, fmt.Errorf("action %s not found", action)
+	}
+
+	actionConfig := rh.Actions.CollectionActions[action]
+
+	policies, err := access.CallPolicyFilter(ctx, actionConfig.Config.Policies, r)
+	if err != nil {
+		return nil, fmt.Errorf("resolve applicable policies: %w", err)
+	}
+	if len(policies) == 0 {
+		return nil, errors.New("no access to call action")
+	}
+
+	result, err := actionConfig.Action(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (rh *ResourceHandle) CallOn(ctx context.Context, r resource.Req, action string) ([]resource.Resourcer, error) {
+	if !rh.Actions.HasSingle(action) {
+		return nil, fmt.Errorf("action %s not found", action)
+	}
+
+	actionConfig := rh.Actions.SingleActions[action]
+
+	policies, err := access.CallPolicyFilter(ctx, actionConfig.Config.Policies, r)
+
+	if err != nil {
+		return nil, fmt.Errorf("resolve applicable policies: %w", err)
+	}
+	if len(policies) == 0 {
+		return nil, errors.New("no access to call action")
+	}
+
+	targets, err := rh.Find(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("resolving action targets: %w", err)
+	}
+
+	result, err := rh.Actions.SingleActions[action].Action(ctx, r, targets)
+	if err != nil {
+		return nil, fmt.Errorf("executing action: %w", err)
+	}
+
+	return result, nil
 }
 
 /*

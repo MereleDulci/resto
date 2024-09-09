@@ -24,6 +24,7 @@ type AccessPolicy struct {
 	CanCreate                   PolicyPredicate
 	CanUpdate                   PolicyPredicate
 	CanDelete                   PolicyPredicate
+	CanCall                     PolicyPredicate
 	ExtendAuthenticationContext ExtendAuthenticationContext
 	IsApplicable                PolicyPredicate
 	ResolveAccessQuery          ResolveAccessQuery
@@ -56,6 +57,11 @@ func (p AccessPolicy) OverrideCanUpdate(predicate PolicyPredicate) AccessPolicy 
 
 func (p AccessPolicy) OverrideCanDelete(predicate PolicyPredicate) AccessPolicy {
 	p.CanDelete = predicate
+	return p
+}
+
+func (p AccessPolicy) OverrideCanCall(predicate PolicyPredicate) AccessPolicy {
+	p.CanCall = predicate
 	return p
 }
 
@@ -179,6 +185,9 @@ var UpdatePolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, 
 })
 var DeletePolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
 	return p.CanDelete != nil && p.CanDelete(ctx, r, p)
+})
+var CallPolicyFilter = MakeFilterApplicablePolicies(func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+	return p.CanCall != nil && p.CanCall(ctx, r, p)
 })
 
 func GetWhitelistFromMapping(mapping map[PolicyName][]string, applicablePolicies []AccessPolicy) []string {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto"
+	"github.com/MereleDulci/resto/pkg/action"
 	"github.com/MereleDulci/resto/pkg/resource"
 	"github.com/MereleDulci/resto/pkg/typecast"
 	"io"
@@ -68,6 +69,18 @@ func (h Handler) AttachMux(ns string, mux *http.ServeMux) Handler {
 		mux.HandleFunc("POST "+baseUrl, h.composeMw(h.makeCreateHandler(rh)))
 		mux.HandleFunc("PATCH "+baseUrl+"/{id}", h.composeMw(h.makeUpdateHandler(rh)))
 		mux.HandleFunc("DELETE "+baseUrl+"/{id}", h.composeMw(h.makeDeleteHandler(rh)))
+
+		for _, collAction := range rh.Actions.CollectionActions {
+			mux.HandleFunc(collAction.Config.Method+" "+baseUrl+"/actions/"+collAction.Config.Name,
+				h.composeMw(h.makeCallHandler(rh, collAction)),
+			)
+		}
+		for _, singleAction := range rh.Actions.SingleActions {
+			mux.HandleFunc(
+				singleAction.Config.Method+" "+baseUrl+"/{id}/"+singleAction.Config.Name,
+				h.composeMw(h.makeCallOnHandler(rh, singleAction)),
+			)
+		}
 	}
 	return h
 }
@@ -278,6 +291,138 @@ func (h Handler) makeDeleteHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (h Handler) makeCallHandler(rh *resto.ResourceHandle, act action.CollectionRegistryEntry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := resource.Query{}
+		query.Filter = pickFilterQueries(r.URL.Query())
+		query.Include = pickCommaSeparated(r.URL.Query(), "include")
+		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
+		query.Limit = pickInt64(r.URL.Query(), "limit")
+		query.Skip = pickInt64(r.URL.Query(), "skip")
+
+		req := resource.NewReq().
+			WithMethod(r.Method).
+			WithToken(h.authenticator(r)).
+			WithQuery(query)
+
+		if act.Config.Method == "POST" {
+			rawBody, err := io.ReadAll(r.Body)
+			if err != nil {
+				handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+				if handleErr != nil {
+					h.errchan <- handleErr
+				}
+				return
+			}
+
+			payload, err := jsonapi.UnmarshalManyAsType(rawBody, act.Config.PayloadType)
+			if err != nil {
+				handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+				if handleErr != nil {
+					h.errchan <- handleErr
+				}
+				return
+			}
+
+			req = req.WithPayload(payload)
+		}
+
+		results, err := rh.Call(r.Context(), req, act.Config.Name)
+		if err != nil {
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
+			}
+			return
+		}
+
+		buf, err := jsonapi.MarshalMany(results)
+		if err != nil {
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", jsonapi.MediaType)
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(buf); err != nil {
+			h.errchan <- err
+		}
+	}
+}
+
+func (h Handler) makeCallOnHandler(rh *resto.ResourceHandle, act action.SingleRegistryEntry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := resource.Query{}
+		query.Filter = pickFilterQueries(r.URL.Query())
+		query.Include = pickCommaSeparated(r.URL.Query(), "include")
+		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
+		query.Limit = pickInt64(r.URL.Query(), "limit")
+		query.Skip = pickInt64(r.URL.Query(), "skip")
+
+		query.Filter["id"] = r.PathValue("id")
+
+		req := resource.NewReq().
+			WithMethod(r.Method).
+			WithToken(h.authenticator(r)).
+			WithQuery(query).
+			WithId(r.PathValue("id"))
+
+		if act.Config.Method == "POST" {
+			rawBody, err := io.ReadAll(r.Body)
+			if err != nil {
+				handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+				if handleErr != nil {
+					h.errchan <- handleErr
+				}
+				return
+			}
+
+			payload, err := jsonapi.UnmarshalManyAsType(rawBody, act.Config.PayloadType)
+			if err != nil {
+				handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+				if handleErr != nil {
+					h.errchan <- handleErr
+				}
+				return
+			}
+
+			req = req.WithPayload(payload)
+		}
+
+		results, err := rh.CallOn(r.Context(), req, act.Config.Name)
+		if err != nil {
+			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
+			}
+			return
+		}
+
+		if len(results) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		buf, err := jsonapi.MarshalMany(results)
+		if err != nil {
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", jsonapi.MediaType)
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(buf); err != nil {
+			h.errchan <- err
+		}
 	}
 }
 
