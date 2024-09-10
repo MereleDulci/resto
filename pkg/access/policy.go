@@ -344,7 +344,16 @@ func ValidateUpdateWritableWhitelist(mapping map[PolicyName][]string, resourcePo
 	whitelist := GetWhitelistFromMapping(mapping, resourcePolicies)
 
 	for _, op := range operations {
-		if !slices.Contains(whitelist, op.Path) {
+		valid := false
+		for _, whitelistEntry := range whitelist {
+			//Update path is targeting exact whitelisted entry, or a full prefix of the update is whitelisted
+			if strings.HasPrefix(op.Path, whitelistEntry) {
+				valid = true
+				continue
+			}
+		}
+
+		if !valid {
 			return errors.New("update is forbidden on path " + op.Path)
 		}
 	}

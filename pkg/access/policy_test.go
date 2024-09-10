@@ -275,6 +275,54 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
+	t.Run("should allow updates to nested keys by prefix if higher level key allows to update", func(t *testing.T) {
+		err := ValidateUpdateWritableWhitelist(map[PolicyName][]string{
+			"system": {"/aMap"},
+			"public": {},
+		}, []AccessPolicy{
+			{Name: "system", IsApplicable: IdentityPredicate(true)},
+		}, []typecast.PatchOperation{
+			{Op: "replace", Path: "/aMap/key"},
+		})
+
+		assert.Nil(t, err)
+	})
+	t.Run("should not allow to update nested keys by prefix if higher level key does not allow to update", func(t *testing.T) {
+		err := ValidateUpdateWritableWhitelist(map[PolicyName][]string{
+			"system": {"/aMap"},
+			"public": {},
+		}, []AccessPolicy{
+			{Name: "public", IsApplicable: IdentityPredicate(true)},
+		}, []typecast.PatchOperation{
+			{Op: "replace", Path: "/aMap/key"},
+		})
+
+		assert.Equal(t, errors.New("update is forbidden on path /aMap/key"), err)
+	})
+
+	t.Run("should allow to update particular nested key by exact match even if higher level key does not allow to update", func(t *testing.T) {
+		pathsConfig := map[PolicyName][]string{
+			"system": {"/aMap"},
+			"public": {"/aMap/allowed"},
+		}
+
+		err := ValidateUpdateWritableWhitelist(pathsConfig, []AccessPolicy{
+			{Name: "public", IsApplicable: IdentityPredicate(true)},
+		}, []typecast.PatchOperation{
+			{Op: "replace", Path: "/aMap/allowed"},
+		})
+
+		assert.Nil(t, err)
+
+		err = ValidateUpdateWritableWhitelist(pathsConfig, []AccessPolicy{
+			{Name: "public", IsApplicable: IdentityPredicate(true)},
+		}, []typecast.PatchOperation{
+			{Op: "replace", Path: "/aMap/blocked"},
+		})
+
+		assert.Equal(t, errors.New("update is forbidden on path /aMap/blocked"), err)
+	})
+
 	t.Run("should return error if operation path not found in whitelist", func(t *testing.T) {
 		err := ValidateUpdateWritableWhitelist(map[PolicyName][]string{
 			"account": {"/account", "/account_alt"},

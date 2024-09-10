@@ -924,6 +924,39 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 		assert.Equal(t, "$set", update[0].Key)
 		assert.Equal(t, bson.D{{"stamp", nil}}, update[0].Value)
 	})
+
+	t.Run("should correctly map updates targeting maps", func(t *testing.T) {
+		tc := MakeTypeCastFromResource(reflect.TypeOf(struct {
+			Map map[string]string `jsonapi:"attr,map" bson:"map"`
+		}{}))
+
+		update, err := tc.PatchToDBOps([]PatchOperation{
+			{Op: constants.PatchOpReplace, Path: "/map", Value: map[string]string{"key": "new"}},
+		})
+
+		assert.Nil(t, err)
+		assert.Equal(t, 1, len(update), "expected update to have 1 element")
+		assert.Equal(t, "$set", update[0].Key)
+		v := update[0].Value.(bson.D)
+		assert.Equal(t, "map", v[0].Key)
+		assert.Equal(t, map[string]string{"key": "new"}, v[0].Value)
+	})
+
+	t.Run("should correctly map updates targeting keys of nested maps", func(t *testing.T) {
+		tc := MakeTypeCastFromResource(reflect.TypeOf(struct {
+			Map map[string]string `jsonapi:"attr,map" bson:"map"`
+		}{}))
+
+		update, err := tc.PatchToDBOps([]PatchOperation{
+			{Op: constants.PatchOpReplace, Path: "/map/key", Value: "new"},
+		})
+		assert.Nil(t, err)
+		assert.Equal(t, 1, len(update), "expected update to have 1 element")
+		assert.Equal(t, "$set", update[0].Key)
+		v := update[0].Value.(bson.D)
+		assert.Equal(t, "map.key", v[0].Key)
+		assert.Equal(t, "new", v[0].Value)
+	})
 }
 
 func TestResourceTypeCast_PatchTestToQuery(t *testing.T) {
