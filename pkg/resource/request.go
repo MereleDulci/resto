@@ -10,6 +10,18 @@ type Resourcer interface {
 	InitID()
 }
 
+type CollectionMeta struct {
+	Count  int64 `json:"count,omitempty"`
+	Offset int64 `json:"offset,omitempty"`
+}
+
+func (cm CollectionMeta) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"count":  cm.Count,
+		"offset": cm.Offset,
+	}
+}
+
 type Filter map[string]string
 
 type Query struct {

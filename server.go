@@ -61,6 +61,7 @@ type ResourceHandler interface {
 	GetResourceName() string
 	GetResourceReflectType() reflect.Type
 	GetHooks() *hook.Registry
+	Meta(context.Context, resource.Req) (resource.CollectionMeta, error)
 	Find(context.Context, resource.Req) ([]resource.Resourcer, error)
 	Create(context.Context, resource.Req) ([]resource.Resourcer, error)
 	Update(context.Context, resource.Req) (resource.Resourcer, error)
@@ -79,10 +80,19 @@ type Encoder struct {
 	cursorDecoder        CursorDecoder
 }
 
+type defaults struct {
+	limit int64
+}
+
+func (d defaults) Limit() int64 {
+	return d.limit
+}
+
 type ResourceHandle struct {
 	ResourceType     reflect.Type
 	Hooks            hook.Registry
 	Actions          action.Registry
+	defaults         defaults
 	resourceTypeCast typecast.ResourceTypeCast
 	encoder          ResourceEncoder
 	collection       *mongo.Collection
@@ -147,6 +157,7 @@ func MakeResourceHandler(t reflect.Type, collection *mongo.Collection, accessPol
 		ResourceType:     t,
 		Hooks:            hook.NewRegistry(),
 		Actions:          action.NewRegistry(),
+		defaults:         defaults{limit: 100},
 		resourceTypeCast: typecast.MakeTypeCastFromResource(t.Elem()),
 		encoder:          encoder,
 		collection:       collection,
@@ -199,6 +210,15 @@ func (rh *ResourceHandle) WithLogger(logger zerolog.Logger) *ResourceHandle {
 	return rh
 }
 
+func (rh *ResourceHandle) WithDefaultLimit(limit int64) *ResourceHandle {
+	rh.defaults.limit = limit
+	return rh
+}
+
+func (rh *ResourceHandle) Defaults() defaults {
+	return rh.defaults
+}
+
 func (rh *ResourceHandle) GetResourceName() string {
 	return rh.ResourceType.String()
 }
@@ -209,6 +229,56 @@ func (rh *ResourceHandle) GetHooks() *hook.Registry {
 
 func (rh *ResourceHandle) GetResourceReflectType() reflect.Type {
 	return rh.ResourceType
+}
+
+func (rh *ResourceHandle) Meta(ctx context.Context, r resource.Req) (resource.CollectionMeta, error) {
+	ctx, cancel := context.WithTimeout(ctx, rh.timeouts.ReadsTimeout)
+	defer cancel()
+
+	r = r.WithMethod(MethodGet)
+
+	applicablePolicies, err := access.ReadPolicyFilter(ctx, rh.encoder.Policies(), r)
+	if err != nil {
+		return resource.CollectionMeta{}, err
+	}
+
+	if len(applicablePolicies) == 0 {
+		return resource.CollectionMeta{}, errors.New("no applicable policies found for read")
+	}
+
+	r, err = rh.Hooks.RunBeforeReads(ctx, r)
+	if err != nil {
+		return resource.CollectionMeta{}, err
+	}
+
+	moddedQuery := r.Query()
+
+	restrictionQuery, err := access.AccessQueryByPolicy(ctx, applicablePolicies, r)
+	if err != nil {
+		return resource.CollectionMeta{}, err
+	}
+
+	typeCastedQuery, err := rh.resourceTypeCast.Query(moddedQuery.Filter)
+	if err != nil {
+		return resource.CollectionMeta{}, err
+	}
+
+	fullFilter := bson.D{
+		{Key: "$and", Value: bson.A{
+			typeCastedQuery,
+			restrictionQuery,
+		}},
+	}
+
+	count, err := rh.collection.CountDocuments(ctx, fullFilter, &options.CountOptions{})
+	if err != nil {
+		return resource.CollectionMeta{}, err
+	}
+
+	return resource.CollectionMeta{
+		Count:  count,
+		Offset: 0,
+	}, nil
 }
 
 func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.Resourcer, error) {

@@ -64,6 +64,7 @@ func (h Handler) AttachMux(ns string, mux *http.ServeMux) Handler {
 			baseUrl = fmt.Sprintf("/%s/%s", strings.Trim(ns, "/"), strings.Trim(baseUrl, "/"))
 		}
 
+		mux.HandleFunc("HEAD "+baseUrl, h.composeMw(h.makeMetaHandler(rh)))
 		mux.HandleFunc("GET "+baseUrl, h.composeMw(h.makeFindManyHandler(rh)))
 		mux.HandleFunc("GET "+baseUrl+"/{id}", h.composeMw(h.makeFindOneHandler(rh)))
 		mux.HandleFunc("POST "+baseUrl, h.composeMw(h.makeCreateHandler(rh)))
@@ -85,6 +86,38 @@ func (h Handler) AttachMux(ns string, mux *http.ServeMux) Handler {
 	return h
 }
 
+func (h Handler) makeMetaHandler(rh *resto.ResourceHandle) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		query := resource.Query{}
+		query.Filter = pickFilterQueries(r.URL.Query())
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64WithDefault(r.URL.Query(), "page[offset]", 0)
+
+		meta, err := rh.Meta(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithQuery(query))
+		if err != nil {
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
+			}
+			return
+		}
+
+		w.Header().Set("Content-Range", fmt.Sprintf("# %d-%d/%d", query.Skip, query.Skip, meta.Count))
+
+		if err != nil {
+			handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+			if handleErr != nil {
+				h.errchan <- handleErr
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func (h Handler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -93,8 +126,8 @@ func (h Handler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerFunc 
 		query.Filter = pickFilterQueries(r.URL.Query())
 		query.Include = pickCommaSeparated(r.URL.Query(), "include")
 		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
-		query.Limit = pickInt64(r.URL.Query(), "limit")
-		query.Skip = pickInt64(r.URL.Query(), "skip")
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64(r.URL.Query(), "page[offset]")
 
 		results, err := rh.Find(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithQuery(query))
 
@@ -115,6 +148,27 @@ func (h Handler) makeFindManyHandler(rh *resto.ResourceHandle) http.HandlerFunc 
 			return
 		}
 
+		if r.URL.Query().Has("page[offset]") {
+			meta, err := rh.Meta(r.Context(), resource.NewReq().WithToken(h.authenticator(r)).WithQuery(query))
+			if err != nil {
+				handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+				if handleErr != nil {
+					h.errchan <- handleErr
+				}
+				return
+			}
+
+			w.Header().Set("Content-Range", fmt.Sprintf("# %d-%d/%d", query.Skip, query.Skip+int64(len(results)), meta.Count))
+			buf, err = jsonapi.MixInMeta(buf, meta.Map())
+			if err != nil {
+				handleErr := h.errhandler(w, r, http.StatusInternalServerError, err)
+				if handleErr != nil {
+					h.errchan <- handleErr
+				}
+				return
+			}
+		}
+
 		w.Header().Set("Content-Type", jsonapi.MediaType)
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(buf); err != nil {
@@ -130,8 +184,8 @@ func (h Handler) makeFindOneHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 		query.Filter = pickFilterQueries(r.URL.Query())
 		query.Include = pickCommaSeparated(r.URL.Query(), "include")
 		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
-		query.Limit = pickInt64(r.URL.Query(), "limit")
-		query.Skip = pickInt64(r.URL.Query(), "skip")
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64(r.URL.Query(), "page[offset]")
 
 		query.Filter["id"] = r.PathValue("id")
 
@@ -173,8 +227,8 @@ func (h Handler) makeCreateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 		query.Filter = pickFilterQueries(r.URL.Query())
 		query.Include = pickCommaSeparated(r.URL.Query(), "include")
 		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
-		query.Limit = pickInt64(r.URL.Query(), "limit")
-		query.Skip = pickInt64(r.URL.Query(), "skip")
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64(r.URL.Query(), "page[offset]")
 
 		rawBody, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -232,8 +286,8 @@ func (h Handler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 		query.Filter = pickFilterQueries(r.URL.Query())
 		query.Include = pickCommaSeparated(r.URL.Query(), "include")
 		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
-		query.Limit = pickInt64(r.URL.Query(), "limit")
-		query.Skip = pickInt64(r.URL.Query(), "skip")
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64(r.URL.Query(), "page[offset]")
 
 		rawBody, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -300,8 +354,8 @@ func (h Handler) makeCallHandler(rh *resto.ResourceHandle, act action.Collection
 		query.Filter = pickFilterQueries(r.URL.Query())
 		query.Include = pickCommaSeparated(r.URL.Query(), "include")
 		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
-		query.Limit = pickInt64(r.URL.Query(), "limit")
-		query.Skip = pickInt64(r.URL.Query(), "skip")
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64(r.URL.Query(), "page[offset]")
 
 		req := resource.NewReq().
 			WithMethod(r.Method).
@@ -362,8 +416,8 @@ func (h Handler) makeCallOnHandler(rh *resto.ResourceHandle, act action.SingleRe
 		query.Filter = pickFilterQueries(r.URL.Query())
 		query.Include = pickCommaSeparated(r.URL.Query(), "include")
 		query.Sort = pickCommaSeparated(r.URL.Query(), "sort")
-		query.Limit = pickInt64(r.URL.Query(), "limit")
-		query.Skip = pickInt64(r.URL.Query(), "skip")
+		query.Limit = pickInt64WithDefault(r.URL.Query(), "page[limit]", rh.Defaults().Limit())
+		query.Skip = pickInt64(r.URL.Query(), "page[offset]")
 
 		query.Filter["id"] = r.PathValue("id")
 
@@ -454,4 +508,16 @@ func pickInt64(q url.Values, key string) int64 {
 		return int64(val)
 	}
 	return 0
+}
+
+func pickInt64WithDefault(q url.Values, key string, def int64) int64 {
+	if q.Has(key) {
+		v := q.Get(key)
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return def
+		}
+		return int64(val)
+	}
+	return def
 }
