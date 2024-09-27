@@ -277,7 +277,7 @@ func (rh *ResourceHandle) Meta(ctx context.Context, r resource.Req) (resource.Co
 
 	return resource.CollectionMeta{
 		Count:  count,
-		Offset: 0,
+		Offset: moddedQuery.Skip,
 	}, nil
 }
 
