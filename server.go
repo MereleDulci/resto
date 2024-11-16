@@ -291,6 +291,7 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 
 	go func() {
 		defer close(reschan)
+		logger := rh.log.With().Str("operation", "read").Logger()
 
 		//Validate read access on the resource by the requestor in principle
 		applicablePolicies, err := access.ReadPolicyFilter(ctx, rh.encoder.Policies(), r)
@@ -301,23 +302,21 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 		policyNames := lo.Map(applicablePolicies, func(p access.AccessPolicy, i int) string {
 			return string(p.Name)
 		})
-		rh.log.Trace().Str("operation", "read").Str("resource", rh.ResourceType.String()).Strs("policies", policyNames).Msg("read access policies acquired")
+		logger.Trace().Strs("policies", policyNames).Msg("read access policies acquired")
 
 		if len(applicablePolicies) == 0 {
 			reschan <- ReadResult{nil, errors.New("no applicable policies found for read")}
 			return
 		}
 
-		rh.log.Trace().Str("operation", "read").Str("resource", rh.ResourceType.String()).Msg("running before read hooks")
+		logger.Trace().Msg("running before read hooks")
 		r, err := rh.Hooks.RunBeforeReads(ctx, r)
 		if err != nil {
 			reschan <- ReadResult{nil, err}
 			return
 		}
 		moddedQuery := r.Query()
-		rh.log.Trace().
-			Str("operation", "read").
-			Str("resource", rh.ResourceType.String()).
+		logger.Trace().
 			Interface("moddedQuery", moddedQuery).
 			Msg("before read hooks finished")
 
@@ -339,9 +338,7 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "read").
-			Str("resource", rh.ResourceType.String()).
+		logger.Trace().
 			Interface("restrictionQuery", restrictionQuery).
 			Msg("restriction query acquired")
 
@@ -351,9 +348,7 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "read").
-			Str("resource", rh.ResourceType.String()).
+		logger.Trace().
 			Interface("typeCastedQuery", typeCastedQuery).
 			Msg("type casted query acquired")
 
@@ -393,9 +388,7 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 				return
 			}
 
-			rh.log.Trace().
-				Str("operation", "read").
-				Str("resource", rh.ResourceType.String()).
+			logger.Trace().
 				Str("id", result.GetID()).
 				Msg("starting after transform for individual resource")
 
@@ -408,9 +401,8 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 				}
 				afterWg.Done()
 
-				rh.log.Trace().
-					Str("operation", "read").
-					Str("resource", rh.ResourceType.String()).
+				l := logger.With().Logger()
+				l.Trace().
 					Str("id", result.GetID()).
 					Msg("finished after transform for individual resource")
 			}(orderIndex)
@@ -421,17 +413,12 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 		go func() {
 			afterWg.Wait()
 			close(afterTransformChan)
-			rh.log.Trace().
-				Str("operation", "read").
-				Str("resource", rh.ResourceType.String()).
-				Msg("after transform channel closed")
+			l := logger.With().Logger()
+			l.Trace().Msg("after transform channel closed")
 		}()
 
 		if err := cursor.Err(); err != nil {
-			rh.log.Error().Stack().Err(err).
-				Str("operation", "read").
-				Str("resource", rh.ResourceType.String()).
-				Msg("cursor error")
+			logger.Error().Stack().Err(err).Msg("cursor error")
 			reschan <- ReadResult{nil, err}
 			return
 		}
@@ -439,18 +426,14 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 		results := make([]resource.Resourcer, orderIndex)
 		for afterResult := range afterTransformChan {
 			if afterResult.err != nil {
-				rh.log.Error().Stack().Err(afterResult.err).
-					Str("operation", "read").
-					Str("resource", rh.ResourceType.String()).
+				logger.Error().Stack().Err(afterResult.err).
 					Msg("after transform aggregation error")
 				reschan <- ReadResult{nil, afterResult.err}
 				return
 			}
 			results[afterResult.orderIndex] = afterResult.resource
 		}
-		rh.log.Trace().
-			Str("operation", "read").
-			Str("resource", rh.ResourceType.String()).
+		logger.Trace().
 			Int("resultsCount", len(results)).
 			Msg("after transform aggregation finished")
 
@@ -509,7 +492,8 @@ func (rh *ResourceHandle) Create(ctx context.Context, r resource.Req) ([]resourc
 			beforeWg.Add(1)
 			go func() {
 				if err := access.ValidateCreateWritableWhitelist(rh.encoder.WritableMappingPost(), applicablePolicies, record); err != nil {
-					rh.log.Error().Stack().Err(err).Msg("requested create paths are invalid")
+					logger := rh.log.With().Logger()
+					logger.Error().Stack().Err(err).Msg("requested create paths are invalid")
 					reschan <- CreateResult{err: err}
 					return
 				}
@@ -612,6 +596,7 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 
 	go func() {
 		defer close(reschan)
+		logger := rh.log.With().Str("operation", "update").Str("id", id).Logger()
 
 		applicablePolicies, err := access.UpdatePolicyFilter(ctx, rh.encoder.Policies(), r)
 		if err != nil {
@@ -623,11 +608,7 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("update resource")
+		logger.Trace().Msg("update resource")
 		oid, err := primitive.ObjectIDFromHex(id)
 		if err != nil {
 			reschan <- UpdateResult{err: errors.New("invalid id")}
@@ -638,19 +619,15 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 		//Now we need to check if the requested updates are allowed
 
 		if err := access.ValidateUpdateWritableWhitelist(rh.encoder.WritableMappingPatch(), applicablePolicies, operations); err != nil {
-			rh.log.Error().Stack().Err(err).Msg("requested update paths are invalid")
+			logger.Error().Stack().Err(err).Msg("requested update paths are invalid")
 			reschan <- UpdateResult{err: err}
 			return
 		}
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("requested update paths are valid")
+		logger.Trace().Msg("requested update paths are valid")
 
 		updateRestrictionQuery, err := access.AccessQueryByPolicy(ctx, applicablePolicies, r)
 		if err != nil {
-			rh.log.Error().Stack().Err(err).Msg("error while generating update restriction query")
+			logger.Error().Stack().Err(err).Msg("error while generating update restriction query")
 			reschan <- UpdateResult{err: err}
 			return
 		}
@@ -658,25 +635,18 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 			reschan <- UpdateResult{err: errors.New("update restriction resolved to nil")}
 			return
 		}
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
+		logger.Trace().
 			Interface("restriction", updateRestrictionQuery).
 			Msg("generated update restriction query")
 
 		//Apply before update hooks to allow internal modifications of the updates
 		r, transformedOperations, err := rh.Hooks.RunBeforeUpdates(ctx, r, operations)
 		if err != nil {
-			rh.log.Error().Stack().Err(err).Msg("error while applying before update hooks")
+			logger.Error().Stack().Err(err).Msg("error while applying before update hooks")
 			reschan <- UpdateResult{err: err}
 			return
 		}
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("before update hooks applied")
+		logger.Trace().Msg("before update hooks applied")
 
 		typeCastedQuery, err := rh.resourceTypeCast.Query(r.Query().Filter)
 		if err != nil {
@@ -696,17 +666,11 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
+		logger.Trace().
 			Interface("ops", dbOperations).
 			Msg("patch transformed to db operations")
 
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
+		logger.Trace().
 			Interface("testQuery", testQuery).
 			Interface("typeCastedQuery", typeCastedQuery).
 			Interface("updateRestrictionQuery", updateRestrictionQuery).
@@ -729,36 +693,28 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 				reschan <- UpdateResult{err: errors.New("not found")}
 				return
 			}
-			rh.log.Error().Stack().Err(err).Msg("error updating resource")
+			logger.Error().Stack().Err(err).Msg("error updating resource")
 			reschan <- UpdateResult{err: singleResult.Err()}
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("update write successful")
+		logger.Trace().Msg("update write successful")
 
 		updatedResource, err := rh.encoder.CursorDecoder(singleResult)
 		if err != nil {
-			rh.log.Error().Stack().Err(err).Msg("error while decoding updated resource")
+			logger.Error().Stack().Err(err).Msg("error while decoding updated resource")
 			reschan <- UpdateResult{err: err}
 			return
 		}
 
 		transformedResource, err := rh.Hooks.RunAfterUpdates(ctx, r, updatedResource)
 		if err != nil {
-			rh.log.Error().Stack().Err(err).Msg("error while applying after update hooks")
+			logger.Error().Stack().Err(err).Msg("error while applying after update hooks")
 			reschan <- UpdateResult{err: err}
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "update").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("after update hooks applied")
+		logger.Trace().Msg("after update hooks applied")
 
 		reschan <- UpdateResult{result: transformedResource, err: nil}
 	}()
@@ -784,6 +740,8 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 
 	go func() {
 		defer close(reschan)
+		logger := rh.log.With().Str("operation", "delete").Str("id", id).Logger()
+
 		applicablePolicies, err := access.DeletePolicyFilter(ctx, rh.encoder.Policies(), r)
 		if err != nil {
 			reschan <- DeleteResult{err: err}
@@ -795,11 +753,7 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "delete").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("delete resource")
+		logger.Trace().Msg("delete resource")
 
 		oid, err := primitive.ObjectIDFromHex(id)
 		if err != nil {
@@ -844,11 +798,7 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "delete").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("before delete hooks applied")
+		logger.Trace().Msg("before delete hooks applied")
 
 		_, err = rh.collection.DeleteOne(ctx, bson.D{{"_id", oid}})
 		if err != nil {
@@ -856,22 +806,14 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 			return
 		}
 
-		rh.log.Trace().
-			Str("operation", "delete").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("delete write successful")
+		logger.Trace().Msg("delete write successful")
 
 		err = rh.Hooks.RunAfterDeletes(ctx, r, resources[0])
 		if err != nil {
 			reschan <- DeleteResult{err: err}
 			return
 		}
-		rh.log.Trace().
-			Str("operation", "delete").
-			Str("resource", rh.ResourceType.String()).
-			Str("id", id).
-			Msg("after delete hooks applied")
+		logger.Trace().Msg("after delete hooks applied")
 
 		reschan <- DeleteResult{err: nil}
 
@@ -951,9 +893,10 @@ through the rigth .Find handler of the target resource.
 There's no direct access to the other resource handles at the moment. However scoped client can be used to access it
 */
 func (rh *ResourceHandle) Include(ctx context.Context, primary []resource.Resourcer, masterReq resource.Req) ([]resource.Resourcer, error) {
+	logger := rh.log.With().Logger()
 	//Identify if include is requested, pass otherwise
 	if len(masterReq.Query().Include) == 0 {
-		rh.log.Trace().Msg("No include requested")
+		logger.Trace().Msg("No include requested")
 		return primary, nil
 	}
 
@@ -973,11 +916,11 @@ func (rh *ResourceHandle) Include(ctx context.Context, primary []resource.Resour
 
 		referencedIds := relationships.GetReferencedIdsFromPrimary(primary, referenceConfig)
 		if len(referencedIds) == 0 {
-			rh.log.Trace().Str("include_path", referenceConfig.LocalField).Msg("No referenced ids found")
+			logger.Trace().Str("include_path", referenceConfig.LocalField).Msg("No referenced ids found")
 			continue
 		}
 
-		rh.log.Trace().Str("include_path", referenceConfig.LocalField).Interface("ids", referencedIds).Msg("Referenced ids")
+		logger.Trace().Str("include_path", referenceConfig.LocalField).Interface("ids", referencedIds).Msg("Referenced ids")
 		secondary, err := scopedClient.Resource(referenceConfig.Resource).Read(ctx, resource.Query{
 			Filter: map[string]string{
 				fmt.Sprintf("%s[$in]", referenceConfig.RemoteField): strings.Join(referencedIds, ","),
@@ -988,7 +931,7 @@ func (rh *ResourceHandle) Include(ctx context.Context, primary []resource.Resour
 			return nil, err
 		}
 
-		rh.log.Trace().Str("include_path", referenceConfig.LocalField).Int("count", len(secondary)).Msg("Secondary resources")
+		logger.Trace().Str("include_path", referenceConfig.LocalField).Int("count", len(secondary)).Msg("Secondary resources")
 		mergeErr := relationships.MergeWithIncluded(primary, secondary, referenceConfig)
 		if mergeErr != nil {
 			return nil, mergeErr
