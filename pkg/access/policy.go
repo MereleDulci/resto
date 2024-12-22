@@ -17,6 +17,7 @@ type PolicyName string
 type PolicyPredicate func(context.Context, resource.Req, AccessPolicy) bool
 type ResolveAccessQuery func(context.Context, resource.Req, AccessPolicy) (bson.D, error)
 type ExtendAuthenticationContext func(context.Context, resource.Req) error
+type PolicyResourceMatch func(context.Context, resource.Req, resource.Resourcer) (bool, error)
 
 type AccessPolicy struct {
 	Name                        PolicyName
@@ -28,6 +29,7 @@ type AccessPolicy struct {
 	ExtendAuthenticationContext ExtendAuthenticationContext
 	IsApplicable                PolicyPredicate
 	ResolveAccessQuery          ResolveAccessQuery
+	ResourceMatch               PolicyResourceMatch
 }
 
 func (p AccessPolicy) OverrideResolveAccessQuery(resolver ResolveAccessQuery) AccessPolicy {
@@ -65,6 +67,11 @@ func (p AccessPolicy) OverrideCanCall(predicate PolicyPredicate) AccessPolicy {
 	return p
 }
 
+func (p AccessPolicy) OverrideResourceMatch(match PolicyResourceMatch) AccessPolicy {
+	p.ResourceMatch = match
+	return p
+}
+
 func IdentityPredicate(val bool) PolicyPredicate {
 	return func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
 		return val
@@ -74,6 +81,34 @@ func IdentityPredicate(val bool) PolicyPredicate {
 func IdentityQueryResolver(q bson.D) ResolveAccessQuery {
 	return func(ctx context.Context, r resource.Req, p AccessPolicy) (bson.D, error) {
 		return q, nil
+	}
+}
+
+func IdentityResourceMatch(val bool) PolicyResourceMatch {
+	return func(ctx context.Context, r resource.Req, res resource.Resourcer) (bool, error) {
+		return val, nil
+	}
+}
+
+func ComposePredicateAnd(predicates ...PolicyPredicate) PolicyPredicate {
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+		for _, predicate := range predicates {
+			if !predicate(ctx, r, p) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func ComposePredicateOr(predicates ...PolicyPredicate) PolicyPredicate {
+	return func(ctx context.Context, r resource.Req, p AccessPolicy) bool {
+		for _, predicate := range predicates {
+			if predicate(ctx, r, p) {
+				return true
+			}
+		}
+		return false
 	}
 }
 
@@ -218,7 +253,15 @@ func GetFieldNamesFromMapping(mapping map[PolicyName][]string) []string {
 	return full
 }
 
-func GetReadableMapping(t reflect.Type, declaredPolicies []AccessPolicy) map[PolicyName][]string {
+func GetReadableMappingBSON(t reflect.Type, declaredPolicies []AccessPolicy) map[PolicyName][]string {
+	return getReadableMapping(getReadBsonTag, t, declaredPolicies)
+}
+
+func GetReadableMappingStruct(t reflect.Type, declaredPolicies []AccessPolicy) map[PolicyName][]string {
+	return getReadableMapping(getReadStructFieldName, t, declaredPolicies)
+}
+
+func getReadableMapping(resolver func(reflect.StructField) string, t reflect.Type, declaredPolicies []AccessPolicy) map[PolicyName][]string {
 
 	var readPolicyMapping = make(map[PolicyName][]string)
 	declaredPolicyNames := lo.Map(declaredPolicies, func(policy AccessPolicy, i int) PolicyName {
@@ -227,7 +270,10 @@ func GetReadableMapping(t reflect.Type, declaredPolicies []AccessPolicy) map[Pol
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		bsonTag := field.Tag.Get("bson")
+
+		//BSON or struct field depending on mapping needs
+		fieldNameSource := resolver(field)
+
 		requestedReadPolicy := PolicyName(field.Tag.Get("read"))
 		if requestedReadPolicy == "" {
 			requestedReadPolicy = declaredPolicyNames[0]
@@ -237,11 +283,11 @@ func GetReadableMapping(t reflect.Type, declaredPolicies []AccessPolicy) map[Pol
 		if requestedReadPolicy != "-" && !slices.Contains(declaredPolicyNames, requestedReadPolicy) {
 			panic(fmt.Errorf("invalid policy %s provided on resource %s", requestedReadPolicy, t.Name()))
 		}
-		if bsonTag == "" && requestedWritePolicy != "-" {
+		if fieldNameSource == "" && requestedWritePolicy != "-" {
 			panic(fmt.Errorf("missing bson tag on field %s, resource %s", field.Name, t.Name()))
 		}
 
-		fieldName := strings.Split(bsonTag, ",")[0]
+		fieldName := strings.Split(fieldNameSource, ",")[0]
 
 		if requestedReadPolicy != "" && requestedReadPolicy != "-" {
 			readPolicyMapping[requestedReadPolicy] = append(readPolicyMapping[requestedReadPolicy], fieldName)
@@ -256,6 +302,14 @@ func GetReadableMapping(t reflect.Type, declaredPolicies []AccessPolicy) map[Pol
 	}
 
 	return readPolicyMapping
+}
+
+func getReadBsonTag(field reflect.StructField) string {
+	return field.Tag.Get("bson")
+}
+
+func getReadStructFieldName(field reflect.StructField) string {
+	return field.Name
 }
 
 func getPatchFieldName(field reflect.StructField) (string, string) {
@@ -372,6 +426,39 @@ func ValidateCreateWritableWhitelist(mapping map[PolicyName][]string, resourcePo
 	}
 
 	return nil
+}
+
+func PostProcessResourceFields(ctx context.Context, req resource.Req, mapping map[PolicyName][]string, resourcePolicies []AccessPolicy, record resource.Resourcer) (resource.Resourcer, error) {
+
+	perRecordPolicies := make([]AccessPolicy, 0)
+	for _, policy := range resourcePolicies {
+		if policy.ResourceMatch != nil {
+			matched, err := policy.ResourceMatch(ctx, req, record)
+			if err != nil {
+				return nil, err
+			}
+
+			if matched {
+				perRecordPolicies = append(perRecordPolicies, policy)
+			}
+		}
+	}
+
+	whitelist := GetWhitelistFromMapping(mapping, perRecordPolicies)
+
+	v := reflect.ValueOf(record)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	for i := range v.Type().NumField() {
+		field := v.Type().Field(i).Name
+		if !slices.Contains(whitelist, field) {
+			v.FieldByName(field).Set(reflect.Zero(v.FieldByName(field).Type()))
+		}
+	}
+
+	return record, nil
 }
 
 func isFieldValueNull(record interface{}, field string) bool {

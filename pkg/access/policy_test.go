@@ -12,6 +12,20 @@ import (
 	"testing"
 )
 
+type sut struct {
+	ID     string
+	String string
+	Int    int
+	Bool   bool
+}
+
+func (s *sut) GetID() string {
+	return ""
+}
+func (s *sut) InitID() {
+	s.ID = "testid"
+}
+
 func TestGetWhitelistFromMapping(t *testing.T) {
 
 	t.Run("should return a union list of fields matching all applicable policies", func(t *testing.T) {
@@ -75,13 +89,13 @@ func TestGetReadableMapping(t *testing.T) {
 			Unknown string `read:"unknown" bson:"unknown"`
 		}
 		assert.PanicsWithError(t, "invalid policy unknown provided on resource X", func() {
-			GetReadableMapping(reflect.TypeOf(X{}), []AccessPolicy{})
+			GetReadableMappingBSON(reflect.TypeOf(X{}), []AccessPolicy{})
 		})
 	})
 
 	t.Run("should distribute struct fields to read access whitelists following policy priority", func(t *testing.T) {
 
-		mapping := GetReadableMapping(reflect.TypeOf(struct {
+		mapping := GetReadableMappingBSON(reflect.TypeOf(struct {
 			Account    string `read:"account" bson:"account"`
 			AccountAlt string `read:"account" bson:"account_alt"`
 			System     string `read:"system" bson:"system"`
@@ -98,7 +112,7 @@ func TestGetReadableMapping(t *testing.T) {
 
 	t.Run("should default missing read policy to the least privileged", func(t *testing.T) {
 
-		mapping := GetReadableMapping(reflect.TypeOf(struct {
+		mapping := GetReadableMappingBSON(reflect.TypeOf(struct {
 			Account string `read:"account" bson:"account"`
 			System  string `bson:"system"`
 		}{}), []AccessPolicy{
@@ -113,7 +127,7 @@ func TestGetReadableMapping(t *testing.T) {
 	})
 
 	t.Run("should correctly handle additional attributes on bson tag", func(t *testing.T) {
-		mapping := GetReadableMapping(reflect.TypeOf(struct {
+		mapping := GetReadableMappingBSON(reflect.TypeOf(struct {
 			Account string `read:"account" bson:"account,omitempty"`
 		}{}), []AccessPolicy{
 			{Name: "account"},
@@ -504,5 +518,115 @@ func TestAccessByInclusiveContextSliceMatch(t *testing.T) {
 		query, err := matcher(ctx, resource.NewReq(), AccessPolicy{})
 		assert.Nil(t, query)
 		assert.Error(t, err, "context value knownThreads not found")
+	})
+}
+
+func TestPostProcessResourceFields(t *testing.T) {
+
+	t.Run("it should continue with no modifications if all fields are allowed", func(t *testing.T) {
+
+		input := sut{
+			String: "A",
+			Int:    2,
+			Bool:   true,
+		}
+
+		out, err := PostProcessResourceFields(context.Background(), resource.NewReq(), map[PolicyName][]string{
+			"account": {"String", "Int", "Bool"},
+		}, []AccessPolicy{
+			{Name: "account", ResourceMatch: IdentityResourceMatch(true)},
+		}, &input)
+
+		assert.Nil(t, err)
+
+		outsut := out.(*sut)
+		assert.Equal(t, true, outsut.Bool)
+		assert.Equal(t, 2, outsut.Int)
+		assert.Equal(t, "A", outsut.String)
+	})
+
+	t.Run("it should filter out fields not allowed by provided single policy", func(t *testing.T) {
+
+		input := sut{
+			String: "a",
+			Int:    2,
+			Bool:   true,
+		}
+
+		out, err := PostProcessResourceFields(context.Background(), resource.NewReq(), map[PolicyName][]string{
+			"account": {},
+		}, []AccessPolicy{
+			{Name: "account", ResourceMatch: IdentityResourceMatch(true)},
+		}, &input)
+
+		assert.Nil(t, err)
+
+		outsut := out.(*sut)
+		assert.Equal(t, false, outsut.Bool)
+		assert.Equal(t, 0, outsut.Int)
+		assert.Equal(t, "", outsut.String)
+	})
+
+	t.Run("it should leave fields allowed by highest tier policy intact", func(t *testing.T) {
+
+		input := sut{
+			String: "a",
+			Int:    2,
+			Bool:   true,
+		}
+
+		out, err := PostProcessResourceFields(context.Background(), resource.NewReq(), map[PolicyName][]string{
+			"system":  {"String"},
+			"account": {},
+		}, []AccessPolicy{
+			{Name: "system", ResourceMatch: IdentityResourceMatch(true)},
+			{Name: "account", ResourceMatch: IdentityResourceMatch(true)},
+		}, &input)
+
+		assert.Nil(t, err)
+
+		outsut := out.(*sut)
+		assert.Equal(t, false, outsut.Bool)
+		assert.Equal(t, 0, outsut.Int)
+		assert.Equal(t, "a", outsut.String)
+
+	})
+
+	t.Run("it should consider policies without resource match defined as not applicable", func(t *testing.T) {
+		input := sut{
+			String: "a",
+		}
+
+		out, err := PostProcessResourceFields(context.Background(), resource.NewReq(), map[PolicyName][]string{
+			"system": {"String"},
+		}, []AccessPolicy{
+			{Name: "system"},
+		}, &input)
+
+		assert.Nil(t, err)
+
+		outsut := out.(*sut)
+		assert.Equal(t, "", outsut.String)
+	})
+
+	t.Run("it should correctly filter out policies not applicable to individual records", func(t *testing.T) {
+		mapping := map[PolicyName][]string{
+			"system": {"String"},
+		}
+		policies := []AccessPolicy{
+			{Name: "system", ResourceMatch: func(ctx context.Context, r resource.Req, record resource.Resourcer) (bool, error) {
+				return record.(*sut).String == "a", nil
+			}},
+		}
+
+		out, err := PostProcessResourceFields(context.Background(), resource.NewReq(), mapping, policies, &sut{String: "a"})
+		assert.Nil(t, err)
+		outsut := out.(*sut)
+		assert.Equal(t, "a", outsut.String)
+
+		out, err = PostProcessResourceFields(context.Background(), resource.NewReq(), mapping, policies, &sut{String: "b"})
+		assert.Nil(t, err)
+		outsut = out.(*sut)
+		assert.Equal(t, "", outsut.String)
 	})
 }

@@ -46,6 +46,7 @@ type ResourceEncoder interface {
 	//GetAccessPolicies returns list of access policies for the resource
 	Policies() []access.AccessPolicy
 	ReadableMapping() map[access.PolicyName][]string
+	ReadableStructMapping() map[access.PolicyName][]string
 	WritableMappingPatch() map[access.PolicyName][]string
 	WritableMappingPost() map[access.PolicyName][]string
 	// CursorEncoder Encodes the provided resource to DB representation of self
@@ -70,14 +71,15 @@ type ResourceHandler interface {
 }
 
 type Encoder struct {
-	referencePaths       []relationships.IncludePath
-	policies             []access.AccessPolicy
-	queryTypeCast        typecast.ResourceTypeCast
-	readableMapping      map[access.PolicyName][]string
-	writableMappingPatch map[access.PolicyName][]string
-	writableMappingPost  map[access.PolicyName][]string
-	cursorEncoder        CursorEncoder
-	cursorDecoder        CursorDecoder
+	referencePaths        []relationships.IncludePath
+	policies              []access.AccessPolicy
+	queryTypeCast         typecast.ResourceTypeCast
+	readableBSONMapping   map[access.PolicyName][]string
+	readableStructMapping map[access.PolicyName][]string
+	writableMappingPatch  map[access.PolicyName][]string
+	writableMappingPost   map[access.PolicyName][]string
+	cursorEncoder         CursorEncoder
+	cursorDecoder         CursorDecoder
 }
 
 type defaults struct {
@@ -131,12 +133,13 @@ type CursorDecoder func(decoder Decoder) (resource.Resourcer, error)
 
 func makeResourceEncoder(resourceType reflect.Type, accessPolicies []access.AccessPolicy) ResourceEncoder {
 	return &Encoder{
-		referencePaths:       relationships.GetReferencesMapping(resourceType),
-		policies:             accessPolicies,
-		queryTypeCast:        typecast.MakeTypeCastFromResource(resourceType),
-		readableMapping:      access.GetReadableMapping(resourceType, accessPolicies),
-		writableMappingPatch: access.GetWritableMappingPatch(resourceType, accessPolicies),
-		writableMappingPost:  access.GetWritableMappingPost(resourceType, accessPolicies),
+		referencePaths:        relationships.GetReferencesMapping(resourceType),
+		policies:              accessPolicies,
+		queryTypeCast:         typecast.MakeTypeCastFromResource(resourceType),
+		readableBSONMapping:   access.GetReadableMappingBSON(resourceType, accessPolicies),
+		readableStructMapping: access.GetReadableMappingStruct(resourceType, accessPolicies),
+		writableMappingPatch:  access.GetWritableMappingPatch(resourceType, accessPolicies),
+		writableMappingPost:   access.GetWritableMappingPost(resourceType, accessPolicies),
 		cursorEncoder: func(resource resource.Resourcer) (interface{}, error) {
 			return resource, nil
 		},
@@ -179,7 +182,10 @@ func (enc *Encoder) Policies() []access.AccessPolicy {
 	return enc.policies
 }
 func (enc *Encoder) ReadableMapping() map[access.PolicyName][]string {
-	return enc.readableMapping
+	return enc.readableBSONMapping
+}
+func (enc *Encoder) ReadableStructMapping() map[access.PolicyName][]string {
+	return enc.readableStructMapping
 }
 func (enc *Encoder) WritableMappingPatch() map[access.PolicyName][]string {
 	return enc.writableMappingPatch
@@ -397,7 +403,12 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 				if afterTransformed, err := rh.Hooks.RunAfterReads(ctx, r, result); err != nil {
 					afterTransformChan <- SingleHookResult{nil, err, 0}
 				} else {
-					afterTransformChan <- SingleHookResult{afterTransformed, nil, index}
+					filtered, err := access.PostProcessResourceFields(ctx, r, rh.encoder.ReadableStructMapping(), applicablePolicies, afterTransformed)
+					if err != nil {
+						afterTransformChan <- SingleHookResult{nil, err, index}
+					} else {
+						afterTransformChan <- SingleHookResult{filtered, nil, index}
+					}
 				}
 				afterWg.Done()
 
