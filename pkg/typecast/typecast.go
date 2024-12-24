@@ -429,6 +429,16 @@ func (caster ResourceTypeCast) Query(query map[string]string) (bson.D, error) {
 				}
 			}
 
+			if modifier == "$exists" {
+				castedValue = castedValue.(string)
+
+				if castedValue == "true" {
+					castedValue = true
+				} else {
+					castedValue = false
+				}
+			}
+
 			targetField := lo.Ternary(rule.Rename != "", rule.Rename, field)
 			out, err = extendQuery(out, targetField, modifier, castedValue)
 			if err != nil {

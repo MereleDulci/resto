@@ -406,6 +406,30 @@ func TestResourceTypeCast_CastQuery(t *testing.T) {
 
 	})
 
+	t.Run("should correctly handle $exists modifiers", func(t *testing.T) {
+		tc := ResourceTypeCast{
+			Rules: map[string]FieldCastRule{
+				"text": {Key: "text"},
+			},
+		}
+
+		truthy, err := tc.Query(map[string]string{
+			"text[$exists]": "true",
+		})
+		assert.Nil(t, err)
+		assert.Equal(t, bson.D{{
+			"text", bson.D{{"$exists", true}},
+		}}, truthy)
+
+		falsy, err := tc.Query(map[string]string{
+			"text[$exists]": "other",
+		})
+		assert.Nil(t, err)
+		assert.Equal(t, bson.D{{
+			"text", bson.D{{"$exists", false}},
+		}}, falsy)
+	})
+
 	t.Run("should apply modifiers to paths without typecast configuration ", func(t *testing.T) {
 		tc := ResourceTypeCast{
 			Rules: map[string]FieldCastRule{
