@@ -494,6 +494,33 @@ func TestResourceTypeCast_CastQuery(t *testing.T) {
 			},
 		}}, out)
 	})
+
+	t.Run("should correctly handle queries to inner structs", func(t *testing.T) {
+		tc := ResourceTypeCast{
+			Rules: map[string]FieldCastRule{
+				"inner.date": {Key: "date", To: constants.CastTypeTime, Rename: "asdate"},
+				"inner.int":  {Key: "int", To: constants.CastTypeInt},
+				"inner":      {Key: "inner"},
+			},
+		}
+
+		query := map[string]string{
+			"inner.int[$gt]": "10",
+			"inner.date":     "2020-01-01T00:00:00Z",
+		}
+
+		out, err := tc.Query(query)
+		assert.Nil(t, err)
+
+		for _, elt := range out {
+			if elt.Key == "inner.int" {
+				assert.Equal(t, bson.E{"inner.int", bson.D{{"$gt", 10}}}, elt)
+			}
+			if elt.Key == "inner.date" {
+				assert.Equal(t, bson.E{"inner.asdate", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)}, elt)
+			}
+		}
+	})
 }
 
 func TestResourceTypeCast_Query_GroupModifiers(t *testing.T) {
@@ -1096,7 +1123,50 @@ func TestMakeTypeCastFromResource(t *testing.T) {
 		assert.Equal(t, reflect.Slice, sptrRule.Kind)
 	})
 
-	t.Run("should correctly interpret referenced resources", func(t *testing.T) {
+	t.Run("should extend nested struct by value", func(t *testing.T) {
+		type Inner struct {
+			Date time.Time `json:"date" bson:"date" cast:"Time"`
+		}
+		type Outer struct {
+			Inner Inner `jsonapi:"attr,inner" bson:"inner"`
+		}
+
+		tc := MakeTypeCastFromResource(reflect.TypeOf(Outer{}))
+		assert.Equal(t, 2, len(tc.Rules))
+
+		outer, ok := tc.Rules["inner"]
+		assert.True(t, ok)
+		assert.Equal(t, "inner", outer.Key)
+
+		inner, ok := tc.Rules["inner.date"]
+		assert.True(t, ok)
+		assert.Equal(t, "date", inner.Key)
+		assert.Equal(t, "Time", inner.To)
+	})
+
+	t.Run("should extend nested struct by pointer", func(t *testing.T) {
+		type Inner struct {
+			Date time.Time `json:"date" bson:"asdate" cast:"Time"`
+		}
+		type Outer struct {
+			Inner *Inner `jsonapi:"attr,inner" bson:"inner"`
+		}
+
+		tc := MakeTypeCastFromResource(reflect.TypeOf(Outer{}))
+		assert.Equal(t, 2, len(tc.Rules))
+
+		outer, ok := tc.Rules["inner"]
+		assert.True(t, ok)
+		assert.Equal(t, "inner", outer.Key)
+
+		inner, ok := tc.Rules["inner.date"]
+		assert.True(t, ok)
+		assert.Equal(t, "date", inner.Key)
+		assert.Equal(t, "Time", inner.To)
+		assert.Equal(t, "asdate", inner.Rename)
+	})
+
+	t.Run("should correctly interpret relations", func(t *testing.T) {
 
 		type testStructA struct {
 			ID string `jsonapi:"primary,resourcename" cast:"ObjectID" bson:"_id"`

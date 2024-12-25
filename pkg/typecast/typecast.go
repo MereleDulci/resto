@@ -63,18 +63,28 @@ func MakeTypeCastFromResource(t reflect.Type) ResourceTypeCast {
 		field := t.Field(i)
 		bsonTag := field.Tag.Get("bson")
 		jsonapiTag := field.Tag.Get("jsonapi")
+		jsonTag := field.Tag.Get("json")
 		castTag := field.Tag.Get("cast")
 
-		if jsonapiTag == "" {
+		if jsonapiTag == "" && jsonTag == "" {
 			continue
 		}
 		if castTag != "" && !slices.Contains(validCastTargets, castTag) {
 			panic(fmt.Errorf("invalid cast target %s, valid options: %s", castTag, strings.Join(validCastTargets, ", ")))
 		}
 
+		jsonParts := strings.Split(jsonTag, ",")
 		jsonapiParts := strings.Split(jsonapiTag, ",")
+		jsonapiFieldName := ""
 
-		jsonapiFieldName := jsonapiParts[1]
+		if len(jsonParts) > 0 {
+			jsonapiFieldName = jsonParts[0]
+		}
+
+		if len(jsonapiParts) > 1 {
+			jsonapiFieldName = jsonapiParts[1]
+		}
+
 		renameTo := ""
 		if bsonTag != jsonapiFieldName {
 			renameTo = bsonTag
@@ -93,7 +103,28 @@ func MakeTypeCastFromResource(t reflect.Type) ResourceTypeCast {
 				To:     castTag,
 				Rename: bsonTag,
 			}
+		} else if jsonapiParts[0] == "relation" {
+			rule := FieldCastRule{
+				Key:    jsonapiFieldName,
+				Kind:   field.Type.Kind(),
+				To:     castTag,
+				Rename: renameTo,
+			}
+
+			rules[jsonapiFieldName] = rule
 		} else {
+			if field.Type.Kind() == reflect.Struct || field.Type.Kind() == reflect.Ptr {
+				plainT := field.Type
+				if field.Type.Kind() == reflect.Ptr {
+					plainT = field.Type.Elem()
+				}
+				innerRules := MakeTypeCastFromResource(plainT)
+
+				for key, rule := range innerRules.Rules {
+					rules[fmt.Sprintf("%s.%s", jsonapiFieldName, key)] = rule
+				}
+			}
+
 			rule := FieldCastRule{
 				Key:    jsonapiFieldName,
 				Kind:   field.Type.Kind(),
