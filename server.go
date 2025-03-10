@@ -216,6 +216,11 @@ func (rh *ResourceHandle) WithLogger(logger zerolog.Logger) *ResourceHandle {
 	return rh
 }
 
+func (rh *ResourceHandle) WithTimeouts(timeouts ResourceTimeoutSettings) *ResourceHandle {
+	rh.timeouts = timeouts
+	return rh
+}
+
 func (rh *ResourceHandle) WithDefaultLimit(limit int64) *ResourceHandle {
 	rh.defaults.limit = limit
 	return rh
