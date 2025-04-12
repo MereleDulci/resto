@@ -83,12 +83,14 @@ type Encoder struct {
 }
 
 type defaults struct {
-	limit int64
+	limit     int64
+	deleteKey string
 }
 
 func (d defaults) Limit() int64 {
 	return d.limit
 }
+func (d defaults) DeleteKey() string { return d.deleteKey }
 
 type ResourceHandle struct {
 	ResourceType     reflect.Type
@@ -160,7 +162,7 @@ func MakeResourceHandler(t reflect.Type, collection *mongo.Collection, accessPol
 		ResourceType:     t,
 		Hooks:            hook.NewRegistry(),
 		Actions:          action.NewRegistry(),
-		defaults:         defaults{limit: 100},
+		defaults:         defaults{limit: 100, deleteKey: "deletedAt"},
 		resourceTypeCast: typecast.MakeTypeCastFromResource(t.Elem()),
 		encoder:          encoder,
 		collection:       collection,
@@ -226,6 +228,11 @@ func (rh *ResourceHandle) WithDefaultLimit(limit int64) *ResourceHandle {
 	return rh
 }
 
+func (rh *ResourceHandle) WithDeleteKey(key string) *ResourceHandle {
+	rh.defaults.deleteKey = key
+	return rh
+}
+
 func (rh *ResourceHandle) Defaults() defaults {
 	return rh.defaults
 }
@@ -276,6 +283,7 @@ func (rh *ResourceHandle) Meta(ctx context.Context, r resource.Req) (resource.Co
 
 	fullFilter := bson.D{
 		{Key: "$and", Value: bson.A{
+			bson.D{{rh.Defaults().DeleteKey(), nil}},
 			typeCastedQuery,
 			restrictionQuery,
 		}},
@@ -365,6 +373,7 @@ func (rh *ResourceHandle) Find(ctx context.Context, r resource.Req) ([]resource.
 
 		fullFilter := bson.D{
 			{Key: "$and", Value: bson.A{
+				bson.D{{rh.Defaults().DeleteKey(), nil}},
 				typeCastedQuery,
 				restrictionQuery,
 			}},
@@ -695,6 +704,7 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 		singleResult := rh.collection.FindOneAndUpdate(ctx,
 			bson.D{
 				{"$and", bson.A{
+					bson.D{{rh.Defaults().DeleteKey(), nil}},
 					bson.D{{"_id", oid}},
 					typeCastedQuery,
 					testQuery,
@@ -816,7 +826,10 @@ func (rh *ResourceHandle) Delete(ctx context.Context, r resource.Req) error {
 
 		logger.Trace().Msg("before delete hooks applied")
 
-		_, err = rh.collection.DeleteOne(ctx, bson.D{{"_id", oid}})
+		_, err = rh.collection.UpdateOne(ctx,
+			bson.D{{"_id", oid}},
+			bson.D{{"$set", bson.D{{rh.Defaults().DeleteKey(), time.Now()}}}},
+		)
 		if err != nil {
 			reschan <- DeleteResult{err: err}
 			return
