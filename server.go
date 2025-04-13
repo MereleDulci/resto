@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/access"
 	"github.com/MereleDulci/resto/pkg/action"
 	"github.com/MereleDulci/resto/pkg/hook"
@@ -612,7 +613,7 @@ func (rh *ResourceHandle) Update(ctx context.Context, r resource.Req) (resource.
 
 	r = r.WithMethod(MethodPatch)
 	id := r.Id()
-	operations, ok := r.Payload().([]typecast.PatchOperation)
+	operations, ok := r.Payload().([]jsonapi.PatchOp)
 	if !ok {
 		return nil, errors.New("invalid payload")
 	}

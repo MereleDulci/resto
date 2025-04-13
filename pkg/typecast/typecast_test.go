@@ -1,6 +1,7 @@
 package typecast
 
 import (
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/constants"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -713,7 +714,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 	t.Run("should convert replace patch to correct $set", func(t *testing.T) {
 		tc := ResourceTypeCast{}
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    "replace",
 				Path:  "/a/b/c",
@@ -736,7 +737,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 	t.Run("should convert inc patch to correct $inc operation at provided path", func(t *testing.T) {
 		tc := ResourceTypeCast{}
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    "inc",
 				Path:  "/a/b/c",
@@ -762,7 +763,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 			Slice []string `jsonapi:"attr,slice" bson:"slice"`
 		}{}))
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    constants.PatchOpAdd,
 				Path:  "/slice",
@@ -788,7 +789,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 			Slice []string `jsonapi:"attr,slice" bson:"slice"`
 		}{}))
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    constants.PatchOpRemove,
 				Path:  "/slice",
@@ -815,7 +816,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 			Plain string   `jsonapi:"attr,plain" bson:"plain"`
 		}{}))
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    constants.PatchOpAdd,
 				Path:  "/slice",
@@ -847,7 +848,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 
 		oid := primitive.NewObjectID()
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    constants.PatchOpReplace,
 				Path:  "/rel",
@@ -890,7 +891,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 		oid := primitive.NewObjectID()
 		hex := oid.Hex()
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    constants.PatchOpReplace,
 				Path:  "/multirel",
@@ -923,7 +924,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 		oid := primitive.NewObjectID()
 		timestamp := time.Now()
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{
 				Op:    constants.PatchOpReplace,
 				Path:  "/rel",
@@ -967,7 +968,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 			Stamp time.Time `jsonapi:"attr,stamp" cast:"Time" bson:"stamp"`
 		}{}))
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{Op: constants.PatchOpReplace, Path: "/stamp", Value: nil},
 		})
 		assert.Nil(t, err)
@@ -981,7 +982,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 			Map map[string]string `jsonapi:"attr,map" bson:"map"`
 		}{}))
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{Op: constants.PatchOpReplace, Path: "/map", Value: map[string]string{"key": "new"}},
 		})
 
@@ -998,7 +999,7 @@ func TestResourceTypeCast_PatchToDBOperations(t *testing.T) {
 			Map map[string]string `jsonapi:"attr,map" bson:"map"`
 		}{}))
 
-		update, err := tc.PatchToDBOps([]PatchOperation{
+		update, err := tc.PatchToDBOps([]jsonapi.PatchOp{
 			{Op: constants.PatchOpReplace, Path: "/map/key", Value: "new"},
 		})
 		assert.Nil(t, err)
@@ -1015,7 +1016,7 @@ func TestResourceTypeCast_PatchTestToQuery(t *testing.T) {
 
 	t.Run("should transform provided test operations to dict", func(t *testing.T) {
 		tc := ResourceTypeCast{}
-		query, err := tc.PatchTestToQuery([]PatchOperation{
+		query, err := tc.PatchTestToQuery([]jsonapi.PatchOp{
 			{Op: "test", Path: "/a/b/c", Value: "string value"},
 		})
 

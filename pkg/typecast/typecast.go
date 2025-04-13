@@ -1,9 +1,9 @@
 package typecast
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/constants"
 	"github.com/samber/lo"
 	"go.mongodb.org/mongo-driver/bson"
@@ -29,25 +29,6 @@ type ResourceTypeCast struct {
 
 var filterModifierRegex = regexp.MustCompile("(.+)(\\[(\\$[[:alpha:]]+)])")
 var filterGroupRegex = regexp.MustCompile("(\\[(\\$[[:alpha:]]+)]\\[(\\d+)])(.+)")
-
-type PatchOperation struct {
-	Op    string      `json:"op"`
-	Path  string      `json:"path"`
-	Value interface{} `json:"value"`
-}
-
-func (p *PatchOperation) UnmarshalJSON(data []byte) error {
-	var v map[string]interface{}
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-
-	p.Op = v["op"].(string)
-	p.Path = v["path"].(string)
-	p.Value = v["value"]
-
-	return nil
-}
 
 func MakeTypeCastFromResource(t reflect.Type) ResourceTypeCast {
 	rules := map[string]FieldCastRule{}
@@ -553,7 +534,7 @@ func (caster ResourceTypeCast) transformPathValue(documentPath string, inputValu
 	}
 }
 
-func (caster ResourceTypeCast) PatchToDBOps(patchOps []PatchOperation) (bson.D, error) {
+func (caster ResourceTypeCast) PatchToDBOps(patchOps []jsonapi.PatchOp) (bson.D, error) {
 	set := bson.D{}
 	push := bson.D{}
 	inc := bson.D{}
@@ -620,7 +601,7 @@ func (caster ResourceTypeCast) PatchToDBOps(patchOps []PatchOperation) (bson.D, 
 	return final, nil
 }
 
-func (caster ResourceTypeCast) PatchTestToQuery(patchOps []PatchOperation) (bson.D, error) {
+func (caster ResourceTypeCast) PatchTestToQuery(patchOps []jsonapi.PatchOp) (bson.D, error) {
 	query := bson.D{}
 	for _, op := range patchOps {
 		if op.Op == constants.PatchOpTest {

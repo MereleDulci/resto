@@ -3,8 +3,8 @@ package resto
 import (
 	"context"
 	"fmt"
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/resource"
-	"github.com/MereleDulci/resto/pkg/typecast"
 	"time"
 )
 
@@ -57,7 +57,7 @@ type Requester interface {
 	Read(ctx context.Context, query resource.Query) ([]resource.Resourcer, error)
 	ReadOne(ctx context.Context, id string, query resource.Query) (resource.Resourcer, error)
 	Create(ctx context.Context, payload []resource.Resourcer) ([]resource.Resourcer, error)
-	Update(ctx context.Context, id string, query resource.Query, payload []typecast.PatchOperation) (resource.Resourcer, error)
+	Update(ctx context.Context, id string, query resource.Query, payload []jsonapi.PatchOp) (resource.Resourcer, error)
 	Delete(ctx context.Context, id string) error
 	Call(ctx context.Context, actionName string, query resource.Query, payload interface{}) ([]resource.Resourcer, error)
 	CallOn(ctx context.Context, actionName string, resourceId string, query resource.Query, payload interface{}) ([]resource.Resourcer, error)
@@ -102,7 +102,7 @@ func (r Request) Create(ctx context.Context, payload []resource.Resourcer) ([]re
 	return r.client.handlers[r.resource].Create(ctx, rq)
 }
 
-func (r Request) Update(ctx context.Context, id string, query resource.Query, payload []typecast.PatchOperation) (resource.Resourcer, error) {
+func (r Request) Update(ctx context.Context, id string, query resource.Query, payload []jsonapi.PatchOp) (resource.Resourcer, error) {
 	rq := resource.NewReq().WithToken(r.client.referenceToken).WithId(id).WithQuery(query).WithPayload(payload)
 	return r.client.handlers[r.resource].Update(ctx, rq)
 }

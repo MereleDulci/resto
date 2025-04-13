@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/resource"
-	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/samber/lo"
 	"go.mongodb.org/mongo-driver/bson"
 	"reflect"
@@ -394,7 +394,7 @@ func MappingToReadProjection(mapping map[PolicyName][]string, appliedPolicies []
 	return lo.Uniq(projection), nil
 }
 
-func ValidateUpdateWritableWhitelist(mapping map[PolicyName][]string, resourcePolicies []AccessPolicy, operations []typecast.PatchOperation) error {
+func ValidateUpdateWritableWhitelist(mapping map[PolicyName][]string, resourcePolicies []AccessPolicy, operations []jsonapi.PatchOp) error {
 	whitelist := GetWhitelistFromMapping(mapping, resourcePolicies)
 
 	for _, op := range operations {

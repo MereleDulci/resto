@@ -1,14 +1,12 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto"
 	"github.com/MereleDulci/resto/pkg/action"
 	"github.com/MereleDulci/resto/pkg/resource"
-	"github.com/MereleDulci/resto/pkg/typecast"
 	"io"
 	"net/http"
 	"net/url"
@@ -298,8 +296,8 @@ func (h Handler) makeUpdateHandler(rh *resto.ResourceHandle) http.HandlerFunc {
 			return
 		}
 
-		patch := make([]typecast.PatchOperation, 0)
-		if err := json.Unmarshal(rawBody, &patch); err != nil {
+		patch, err := jsonapi.UnmarshalPatches(rawBody, rh.GetResourceReflectType())
+		if err != nil {
 			handleErr := h.errhandler(w, r, http.StatusBadRequest, err)
 			if handleErr != nil {
 				h.errchan <- handleErr

@@ -3,8 +3,8 @@ package access
 import (
 	"context"
 	"errors"
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/resource"
-	"github.com/MereleDulci/resto/pkg/typecast"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/exp/slices"
@@ -282,7 +282,7 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 			"account": {"/account", "/account_alt"},
 		}, []AccessPolicy{
 			{Name: "account", IsApplicable: IdentityPredicate(true)},
-		}, []typecast.PatchOperation{
+		}, []jsonapi.PatchOp{
 			{Op: "replace", Path: "/account"},
 		})
 
@@ -295,7 +295,7 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 			"public": {},
 		}, []AccessPolicy{
 			{Name: "system", IsApplicable: IdentityPredicate(true)},
-		}, []typecast.PatchOperation{
+		}, []jsonapi.PatchOp{
 			{Op: "replace", Path: "/aMap/key"},
 		})
 
@@ -307,7 +307,7 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 			"public": {},
 		}, []AccessPolicy{
 			{Name: "public", IsApplicable: IdentityPredicate(true)},
-		}, []typecast.PatchOperation{
+		}, []jsonapi.PatchOp{
 			{Op: "replace", Path: "/aMap/key"},
 		})
 
@@ -322,7 +322,7 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 
 		err := ValidateUpdateWritableWhitelist(pathsConfig, []AccessPolicy{
 			{Name: "public", IsApplicable: IdentityPredicate(true)},
-		}, []typecast.PatchOperation{
+		}, []jsonapi.PatchOp{
 			{Op: "replace", Path: "/aMap/allowed"},
 		})
 
@@ -330,7 +330,7 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 
 		err = ValidateUpdateWritableWhitelist(pathsConfig, []AccessPolicy{
 			{Name: "public", IsApplicable: IdentityPredicate(true)},
-		}, []typecast.PatchOperation{
+		}, []jsonapi.PatchOp{
 			{Op: "replace", Path: "/aMap/blocked"},
 		})
 
@@ -342,7 +342,7 @@ func TestValidateUpdateWritableWhitelist(t *testing.T) {
 			"account": {"/account", "/account_alt"},
 		}, []AccessPolicy{
 			{Name: "public", IsApplicable: IdentityPredicate(true)},
-		}, []typecast.PatchOperation{
+		}, []jsonapi.PatchOp{
 			{Op: "replace", Path: "/account"},
 		})
 

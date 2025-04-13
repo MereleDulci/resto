@@ -2,13 +2,13 @@ package hook
 
 import (
 	"context"
+	"github.com/MereleDulci/jsonapi"
 	"github.com/MereleDulci/resto/pkg/resource"
-	"github.com/MereleDulci/resto/pkg/typecast"
 )
 
 type BeforeRead func(context.Context, resource.Req) (resource.Req, error)
 type BeforeCreate func(context.Context, resource.Req, resource.Resourcer) (resource.Req, resource.Resourcer, error)
-type BeforeUpdate func(context.Context, resource.Req, []typecast.PatchOperation) (resource.Req, []typecast.PatchOperation, error)
+type BeforeUpdate func(context.Context, resource.Req, []jsonapi.PatchOp) (resource.Req, []jsonapi.PatchOp, error)
 type BeforeDelete func(context.Context, resource.Req, resource.Resourcer) (resource.Req, error)
 
 type After func(context.Context, resource.Req, resource.Resourcer) (resource.Resourcer, error)
@@ -129,7 +129,7 @@ func (hr *Registry) RunAfterReadAll(ctx context.Context, r resource.Req, records
 	return nextRecords, nil
 }
 
-func (hr *Registry) RunBeforeUpdates(ctx context.Context, r resource.Req, ops []typecast.PatchOperation) (resource.Req, []typecast.PatchOperation, error) {
+func (hr *Registry) RunBeforeUpdates(ctx context.Context, r resource.Req, ops []jsonapi.PatchOp) (resource.Req, []jsonapi.PatchOp, error) {
 	var err error
 	nextOps := ops
 	for _, hook := range hr.beforeUpdates {
