@@ -6,6 +6,8 @@ github.com/MereleDulci/jsonapi v0.0.10-0.20250413180115-6a248681b1d8 h1:SzMyFLkw
 github.com/MereleDulci/jsonapi v0.0.10-0.20250413180115-6a248681b1d8/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
 github.com/MereleDulci/jsonapi v0.0.10-0.20250413191336-2837388dd752 h1:YxBiCwO3ONgtSZgVCyPPeQTioFBeFBl48+WPlg82ZJM=
 github.com/MereleDulci/jsonapi v0.0.10-0.20250413191336-2837388dd752/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
+github.com/MereleDulci/jsonapi v0.0.10-0.20250414063824-1de6cff007c3 h1:7D5tkDRei/uapgv1SQwDmbVGJvKZWnMqKk5Y8MO7o/U=
+github.com/MereleDulci/jsonapi v0.0.10-0.20250414063824-1de6cff007c3/go.mod h1:aC/icZMxS9er6RQqMBN82LJ4S1GldcQvKINJo0Xfcy4=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
