@@ -3,7 +3,7 @@ module github.com/MereleDulci/resto
 go 1.22.1
 
 require (
-	github.com/MereleDulci/jsonapi v0.0.10-0.20250430072354-977623dcf0a2
+	github.com/MereleDulci/jsonapi v0.0.10-0.20250504174952-f86eae0c6db3
 	github.com/rs/zerolog v1.32.0
 	github.com/samber/lo v1.39.0
 	github.com/stretchr/testify v1.9.0
